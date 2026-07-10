@@ -1,9 +1,5 @@
 \section{总结与展望}
 
-\placeholder{根据正式实验回答研究问题：位置变化是否影响分类、哪类模型更稳定、数据增强是否有效、HybridConv-ViT 是否提升鲁棒性。}
+本项目以可控方式把 FashionMNIST 的中心分类问题扩展为位置可变条件下的分类实验。六组结果共同提示：中心准确率不足以代表位置鲁棒性。中心训练的 MLP、CNN 与 ViT-AbsPos 都在 Large Shift 和完整网格上发生大幅下降；将随机位置、旋转、缩放和擦除纳入训练后，热力图明显变平。加入卷积 stem 与 Mean Pooling 的 HybridConv-ViT 在本次配置中取得最小的 Robust Drop 和最高的 Grid Accuracy。
 
-\subsection{局限性}
-\placeholder{讨论 CPU 训练预算、数据规模、绝对位置编码、边界裁剪与实验重复次数等限制。}
-
-\subsection{后续工作}
-\placeholder{填写 attention map、更多消融、真实图片测试或 GPU 大模型实验等计划。}
+这些结果更像一个值得继续追踪的探索方向，而不是对模型优劣的最终验证。当前六组实验使用单个随机种子、统一但有限的 CPU 预算，且 E4--E6 的增强、pooling 与 stem 并未完全解耦。未来可以在多个种子下重复训练，补充仅随机平移、仅 Mean Pooling、仅卷积 stem 的控制实验；也可以比较 No-Pos 与 Sin-Cos 位置编码，并将真实拍摄的衣物图像作为不参与训练的外部测试集。对于边缘裁剪，还可将纯平移与显式遮挡分开标注，以更清楚地区分位置变化和信息缺失带来的影响。

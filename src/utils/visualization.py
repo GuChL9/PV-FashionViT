@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
+# All figures are files, never interactive windows.  This keeps the training
+# and analysis commands usable on Windows/CI installations without Tcl/Tk.
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 

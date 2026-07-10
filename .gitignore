@@ -6,6 +6,7 @@ __pycache__/
 tmp/
 data/*
 !data/.gitkeep
+outputs/
 outputs/checkpoints/*
 !outputs/checkpoints/.gitkeep
 outputs/logs/*
@@ -21,7 +22,6 @@ report/*.fdb_latexmk
 report/*.fls
 report/*.log
 report/*.out
-report/*.pdf
 report/*.run.xml
 report/*.synctex.gz
 report/*.toc

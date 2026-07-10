@@ -92,7 +92,16 @@ def upsert_csv(path, key, row, fieldnames):
     write_csv(path, rows, fieldnames)
 
 
-def run_evaluation_suite(model, criterion, device, config, run_dir: Path, smoke: bool, skip_grid: bool):
+def run_evaluation_suite(
+    model,
+    criterion,
+    device,
+    config,
+    run_dir: Path,
+    smoke: bool,
+    skip_grid: bool,
+    publish_global: bool = True,
+):
     data_cfg, seed = config["data"], config["seed"]
     conditions = {}
     large_shift_dataset = None
@@ -147,6 +156,11 @@ def run_evaluation_suite(model, criterion, device, config, run_dir: Path, smoke:
             CLASS_NAMES,
             run_dir / "figures" / "misclassified_examples.png",
         )
+
+    # A smoke run validates the code path only.  It must remain completely
+    # separate from formal experiment summaries used in plots and reports.
+    if not publish_global:
+        return summary
 
     global_tables = Path(config["output"]["save_dir"]) / "tables"
     upsert_csv(
@@ -263,7 +277,16 @@ def main():
 
     run_grid_by_default = bool(config.get("evaluation", {}).get("run_grid_after_training", False))
     skip_grid = args.skip_grid or (not args.grid and not run_grid_by_default)
-    summary = run_evaluation_suite(model, criterion, device, config, run_dir, args.smoke, skip_grid)
+    summary = run_evaluation_suite(
+        model,
+        criterion,
+        device,
+        config,
+        run_dir,
+        args.smoke,
+        skip_grid,
+        publish_global=not args.smoke,
+    )
     print(json.dumps({"device": str(device), "cpu_threads": torch.get_num_threads(), **summary},
                      ensure_ascii=False, indent=2))
 

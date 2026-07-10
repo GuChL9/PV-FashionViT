@@ -26,6 +26,7 @@ def build_model(cfg):
         "num_heads": cfg.get("num_heads", 4),
         "mlp_ratio": cfg.get("mlp_ratio", 4.0),
         "pooling": cfg.get("pooling", "cls"),
+        "positional_encoding": cfg.get("positional_encoding", "learnable"),
     }
     if name == "vit":
         return TinyViT(**transformer)
@@ -42,4 +43,3 @@ __all__ = [
     "HybridConvViT",
     "build_model",
 ]
-

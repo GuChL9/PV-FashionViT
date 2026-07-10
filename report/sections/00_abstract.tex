@@ -1,5 +1,5 @@
 \begin{abstract}
-  \placeholder{用 150--300 字概括任务、PV-FashionMNIST 构造、对比模型、评估协议、主要结果与结论。正式实验完成前不要填写推测数值。}
+  本项目尝试把 FashionMNIST 上默认居中的分类任务改写为一个位置可控的鲁棒性问题。我们将 $28\times28$ 的灰度服饰前景放置到 $56\times56$ 画布的不同坐标，构造 PV-FashionMNIST，并比较 MLP、CNN、带绝对位置编码的 Tiny ViT，以及加入仿射增强、Mean Pooling 和卷积 stem 的 ViT 变体。除中心、随机小平移和随机大平移外，项目还在 $7\times7$ 固定位置网格上逐点测试，以观察准确率的空间分布。实验中，中心训练的 MLP、CNN 与 ViT-AbsPos 在大平移下均出现明显下降；加入增强后的 ViT 变体在网格上的表现更均匀。HybridConv-ViT 在本次配置下取得 $85.43\%$ 的 Grid Accuracy，Center 与 Large Shift 的差为 $0.27$ 个百分点。结果提示：在这一小型数据集与单次训练预算下，位置鲁棒性不能只由中心准确率判断，训练数据中的位置分布与轻量局部归纳偏置都值得继续考察。项目同时保留了混淆矩阵、错误样本和 attention rollout，用于辅助梳理模型在边缘位置的行为。
 
-  \noindent\textbf{关键词：}\fieldplaceholder{3--5 个关键词}
+  \noindent\textbf{关键词：}位置鲁棒性；FashionMNIST；Vision Transformer；数据增强；可视化分析
 \end{abstract}

@@ -1,7 +1,7 @@
 \section{实验设计}
 
 \subsection{主实验矩阵}
-\placeholder{说明六组模型的训练数据、测试协议和控制变量。}
+表\ref{tab:experiment-matrix}给出六组主实验。E1--E3 在中心位置训练，用于先观察不同基本架构受到位置分布变化时的敏感程度；E4--E6 使用 Affine 训练模式，逐步引入 Mean Pooling 与卷积 stem。所有模型都接受相同的四类最终测试协议，从而保证位置评估口径一致。
 
 \begin{table}[H]
   \centering
@@ -9,17 +9,17 @@
   \label{tab:experiment-matrix}
   \begin{tabular}{llll}
     \toprule
-    编号 & 模型 & 训练数据 & 测试协议 \\
+    编号 & 模型 & 训练数据 & 主要考察点 \\
     \midrule
-    E1 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
-    E2 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
-    E3 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
-    E4 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
-    E5 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
-    E6 & \fieldplaceholder{模型} & \fieldplaceholder{训练数据} & \fieldplaceholder{测试协议} \\
+    E1 & MLP & PV-Center & 无空间结构基线 \\
+    E2 & CNN & PV-Center & 局部卷积归纳偏置 \\
+    E3 & ViT-AbsPos & PV-Center & 绝对位置编码与 CLS token \\
+    E4 & ViT-Aug & PV-Affine & 训练期位置与外观增强 \\
+    E5 & ViT-MeanPool & PV-Affine & token 聚合方式 \\
+    E6 & HybridConv-ViT & PV-Affine & 卷积 stem 与 Mean Pooling \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\subsection{消融实验}
-\placeholder{填写 patch size、embedding dimension、增强、pooling 和卷积 stem 的消融设置。}
+\subsection{分析原则}
+本实验矩阵不是严格的全因子设计：E4--E6 在结构改变之外共享增强训练，Hybrid 还同时使用了 Mean Pooling。因此，表\ref{tab:ablation-results}中的比较用于提出下一步值得验证的假设，而不把所有差值解释为某个单独模块的因果效应。比较时重点查看三条线索：中心与大平移的差距、49 点热力图是否平坦，以及类别层面是否仍存在集中失败。

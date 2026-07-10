@@ -1,31 +1,57 @@
 \section{可视化与错误分析}
 
-\subsection{训练曲线}
-\placeholder{插入 loss 与 accuracy 曲线，分析收敛速度、过拟合和早停位置。}
+\subsection{训练过程}
+图\ref{fig:training-curves}汇总六组验证曲线。中心训练的 MLP、CNN 与 ViT-AbsPos 在较早阶段即可达到较高验证准确率；使用 Affine 训练的模型在中心验证上的起点更低，但后续位置测试更稳定。该差异符合一个直观猜测：训练分布更广时，模型未必把能力集中在中心位置。由于每组只运行一次固定种子，曲线仅反映本次训练轨迹，不用于判断统计显著性。
 
 \begin{figure}[H]
   \centering
-  \figureplaceholder{替换为训练 loss/accuracy 曲线。}
-  \caption{训练与验证曲线}
+  \includegraphics[width=0.96\textwidth]{training_curves_overview.png}
+  \caption{六组模型的验证准确率与验证损失曲线。不同模型的单 epoch 耗时不同，横轴只表示训练轮数。}
   \label{fig:training-curves}
 \end{figure}
 
-\subsection{位置网格分析}
-\placeholder{插入 Grid Accuracy heatmap，分析准确率随位置变化的规律。}
+\subsection{位置网格}
+图\ref{fig:grid-panel}是本项目最直接的空间证据。MLP、CNN 和 ViT-AbsPos 在 $(0,0)$ 附近形成明显高值区，离开中心后大面积接近随机猜测水平。ViT-AbsPos 的高值区相对更宽，但仍随边缘位置迅速下降。相反，ViT-Aug 与 ViT-MeanPool 的热力图在 0.7 左右较为平坦；HybridConv-ViT 在全部 49 个位置上约为 0.83--0.87。这里的平坦性比单一 Grid 平均值更有信息量：它显示该模型并非只在少数偏移坐标上偶然表现良好。
 
 \begin{figure}[H]
   \centering
-  \figureplaceholder{替换为位置网格准确率热力图。}
-  \caption{位置网格准确率}
-  \label{fig:grid-heatmap}
+  \includegraphics[width=0.98\textwidth]{grid_accuracy_panel.png}
+  \caption{六组模型的 $7\times7$ 位置网格准确率。横纵轴为前景相对中心的像素平移。}
+  \label{fig:grid-panel}
 \end{figure}
 
-\subsection{混淆矩阵与错误样本}
-\placeholder{结合混淆矩阵和错误样本，区分类别相似、位置变化和边界裁剪造成的错误。}
+\subsection{混淆与边缘错误}
+图\ref{fig:confusion-error}给出 HybridConv-ViT 在 Large Shift 下的混淆矩阵和部分错误样本。尽管 Hybrid 的总体准确率较高，Shirt 仍容易与形状相近的上装类别混淆。错误样本中还可看到部分主体被截断，模型只能利用局部边缘或纹理判断类别。因而，极端坐标上的失败不能完全被解释为 ``模型没有学会平移不变性''；可见信息减少同样改变了任务难度。
 
 \begin{figure}[H]
   \centering
-  \figureplaceholder{替换为混淆矩阵或典型错误样本图。}
-  \caption{分类错误分析}
-  \label{fig:error-analysis}
+  \begin{minipage}{0.47\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{final_confusion_matrix.png}
+    \caption*{(a) Large Shift 混淆矩阵}
+  \end{minipage}\hfill
+  \begin{minipage}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{final_misclassified_examples.png}
+    \caption*{(b) 部分错误样本}
+  \end{minipage}
+  \caption{HybridConv-ViT 在 Large Shift 下的类别混淆与典型错误。}
+  \label{fig:confusion-error}
+\end{figure}
+
+\subsection{Attention Rollout 作为辅助观察}
+为避免只展示容易分类的样本，我们从四个角落选择了 ViT-AbsPos 未正确分类而 HybridConv-ViT 正确分类的十个样本，并按不同类别和坐标分布到图\ref{fig:attention-one}与图\ref{fig:attention-two}。图中左列为输入，中列与右列分别为两个模型的 rollout 叠加结果。可以观察到，Hybrid 的高响应通常与当前前景所在角落更一致；ViT-AbsPos 的响应有时扩散到前景之外。不过该图是按预测差异筛选的展示样本，存在选择性，且 attention 权重本身不等同于因果归因。因此它只支持对模型行为的定性讨论，不替代表\ref{tab:main-results}和图\ref{fig:grid-panel}中的量化结论。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.84\textwidth]{attention_abspos_vs_hybrid_01.png}
+  \caption{五个边缘位置样本上的 attention rollout 对照（一）。左至右为输入、ViT-AbsPos 与 HybridConv-ViT。}
+  \label{fig:attention-one}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.84\textwidth]{attention_abspos_vs_hybrid_02.png}
+  \caption{五个边缘位置样本上的 attention rollout 对照（二）。样本的完整筛选记录保存在项目输出目录。}
+  \label{fig:attention-two}
 \end{figure}
