@@ -1,0 +1,24 @@
+_base_: base.yaml
+device: auto
+
+data:
+  batch_size: 128
+  eval_batch_size: 256
+  num_workers: 4
+
+model:
+  hidden_dim: 512
+  patch_size: 4
+  embed_dim: 128
+  depth: 4
+  num_heads: 4
+  mlp_ratio: 4.0
+
+train:
+  epochs: 30
+  cpu_threads: 0
+  early_stopping_patience: 6
+  early_stopping_min_epochs: 10
+
+evaluation:
+  run_grid_after_training: true

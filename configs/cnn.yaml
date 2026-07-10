@@ -1,0 +1,5 @@
+_base_: base.yaml
+run_name: cnn_center_cpu
+model:
+  name: cnn
+  hidden_dim: 128

@@ -1,0 +1,6 @@
+_base_: ../base_gpu.yaml
+run_name: cnn_center_gpu
+model:
+  name: cnn
+  hidden_dim: 256
+

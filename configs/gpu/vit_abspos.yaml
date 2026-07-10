@@ -1,0 +1,6 @@
+_base_: ../base_gpu.yaml
+run_name: vit_abspos_center_gpu
+model:
+  name: vit
+  pooling: cls
+

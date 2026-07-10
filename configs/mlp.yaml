@@ -1,0 +1,5 @@
+_base_: base.yaml
+run_name: mlp_center_cpu
+model:
+  name: mlp
+  hidden_dim: 256

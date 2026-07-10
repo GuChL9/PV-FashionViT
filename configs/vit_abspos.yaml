@@ -1,0 +1,5 @@
+_base_: base.yaml
+run_name: vit_abspos_center_cpu
+model:
+  name: vit
+  pooling: cls
