@@ -1,0 +1,61 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{pvfashionvit}[2026/07/10 PV-FashionViT report style]
+
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{array}
+\RequirePackage{booktabs}
+\RequirePackage{caption}
+\RequirePackage{fancyhdr}
+\RequirePackage{float}
+\RequirePackage{geometry}
+\RequirePackage{graphicx}
+\RequirePackage{hyperref}
+\RequirePackage{longtable}
+\RequirePackage{tabularx}
+\RequirePackage{xcolor}
+
+\geometry{top=2.6cm,bottom=2.6cm,left=2.8cm,right=2.8cm,headheight=16pt}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.25em}
+\linespread{1.25}
+
+\definecolor{PVBlue}{HTML}{244A73}
+\definecolor{PVLight}{HTML}{F3F6F9}
+\definecolor{PVBorder}{HTML}{AAB7C4}
+\definecolor{PVMuted}{HTML}{5F6B76}
+
+\hypersetup{
+  unicode=true,
+  colorlinks=true,
+  linkcolor=PVBlue,
+  citecolor=PVBlue,
+  urlcolor=PVBlue,
+  pdfborder={0 0 0}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{PV-FashionViT}
+\fancyhead[R]{课程项目报告}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\captionsetup{font=small,labelfont=bf}
+\graphicspath{{figures/}{../outputs/figures/}}
+
+\newcommand{\fieldplaceholder}[1]{\textcolor{PVMuted}{[待填写：#1]}}
+
+\newcommand{\placeholder}[1]{%
+  \par\medskip
+  \noindent\fcolorbox{PVBorder}{PVLight}{%
+    \parbox{0.94\linewidth}{\textcolor{PVMuted}{\textbf{填写提示：}#1}}%
+  }
+  \par\medskip
+}
+
+\newcommand{\figureplaceholder}[2][0.78\textwidth]{%
+  \fcolorbox{PVBorder}{PVLight}{%
+    \parbox[c][5.2cm][c]{#1}{\centering\color{PVMuted}\textbf{图片占位}\par\smallskip #2}%
+  }%
+}

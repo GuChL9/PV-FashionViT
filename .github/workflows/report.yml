@@ -1,0 +1,37 @@
+name: build-report
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "report/**"
+      - ".github/workflows/report.yml"
+  pull_request:
+    paths:
+      - "report/**"
+      - ".github/workflows/report.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile report with XeLaTeX
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: main.tex
+          working_directory: report
+          latexmk_use_xelatex: true
+
+      - name: Upload compiled PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: PV-FashionViT-report
+          path: report/main.pdf
+          if-no-files-found: error

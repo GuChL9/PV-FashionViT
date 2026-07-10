@@ -1,4 +1,6 @@
 * text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 *.yml text eol=lf
@@ -6,6 +8,9 @@
 *.md text eol=lf
 *.csv text eol=lf
 *.ipynb text eol=lf
+*.tex text eol=lf
+*.sty text eol=lf
+*.bib text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.pt binary

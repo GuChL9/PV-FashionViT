@@ -1,0 +1,16 @@
+\section{训练与评估流程}
+
+\subsection{训练设置}
+\placeholder{填写设备、epoch、batch size、优化器、学习率、权重衰减、scheduler、label smoothing、早停与随机种子。}
+
+\subsection{Checkpoint 与日志}
+\placeholder{说明 best/last checkpoint 的选择规则、日志字段和复现实验所需的信息。}
+
+\subsection{评估指标}
+\placeholder{定义 Center、Small Shift、Large Shift、Grid Accuracy、Robust Drop、类别准确率和混淆矩阵。}
+
+\begin{equation}
+  \text{Robust Drop}
+  = \text{Center Accuracy} - \text{Large Shift Accuracy}.
+  \label{eq:robust-drop}
+\end{equation}

@@ -1,0 +1,65 @@
+\documentclass[UTF8,a4paper,12pt,fontset=fandol]{ctexart}
+
+\usepackage{pvfashionvit}
+
+% -----------------------------------------------------------------------------
+% 项目信息：提交前由小组填写
+% -----------------------------------------------------------------------------
+\newcommand{\ReportTitle}{PV-FashionViT：基于 Transformer 的位置可变 FashionMNIST 图像分类}
+\newcommand{\CourseName}{\fieldplaceholder{课程名称}}
+\newcommand{\SchoolName}{\fieldplaceholder{学院/专业}}
+\newcommand{\SubmissionDate}{\fieldplaceholder{提交日期}}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2.2cm}
+  {\zihao{-1}\bfseries\color{PVBlue}\ReportTitle\par}
+  \vspace{1.2cm}
+  {\zihao{3}\CourseName\par}
+  \vspace{0.4cm}
+  {\zihao{4}\SchoolName\par}
+  \vfill
+
+  \renewcommand{\arraystretch}{1.6}
+  \begin{tabularx}{0.88\textwidth}{>{\centering\arraybackslash}p{2.6cm} X X X}
+    \toprule
+    姓名 & 学号 & GitHub 用户名 & 主要贡献 \\
+    \midrule
+    \fieldplaceholder{成员 1} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
+    \fieldplaceholder{成员 2} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
+    \fieldplaceholder{成员 3} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
+    \fieldplaceholder{成员 4} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
+    \bottomrule
+  \end{tabularx}
+
+  \vfill
+  {\zihao{4}\SubmissionDate\par}
+  \vspace*{1.2cm}
+\end{titlepage}
+
+\pagenumbering{Roman}
+\input{sections/00_abstract}
+\clearpage
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+\input{sections/01_introduction}
+\input{sections/02_task_and_dataset}
+\input{sections/03_models}
+\input{sections/04_training}
+\input{sections/05_experiments}
+\input{sections/06_results}
+\input{sections/07_visualization_and_error_analysis}
+\input{sections/08_conclusion}
+\input{sections/09_contributions}
+\input{sections/10_references}
+
+% 使用 BibTeX 时，删除 sections/10_references.tex 中的占位内容，
+% 并取消下面两行的注释。
+% \bibliographystyle{unsrt}
+% \bibliography{references}
+
+\end{document}

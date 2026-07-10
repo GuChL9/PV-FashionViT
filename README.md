@@ -22,7 +22,7 @@ scripts/       单模型与一键实验脚本
 tests/         数据集和模型单元测试
 notebooks/     数据、结果和注意力分析入口
 outputs/       自动生成的表格、图片、日志和权重
-report/        报告与成员贡献
+report/        中文 XeLaTeX 报告模板
 ```
 
 更精确的实验口径和对原说明书的修订见 [PROJECT_SPEC.md](PROJECT_SPEC.md)。
