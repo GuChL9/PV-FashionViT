@@ -1,30 +1,18 @@
 \section{模型设计}
 
-\subsection{MLP}
-\placeholder{填写输入展平、隐藏层、激活函数、Dropout 和分类头结构。}
+所有模型接收 $[B,1,56,56]$ 张量并输出十类 logits。模型规模有意保持较小，以便将实验重点放在位置协议和结构差异，而非预训练或大规模算力。
 
-\subsection{CNN}
-\placeholder{填写卷积层、池化层、特征尺寸和分类头结构。}
+\subsection{MLP 与 CNN 基线}
+MLP 将图像展平为 3,136 维向量，经 ``Linear(256)--ReLU--Dropout--Linear(10)'' 完成分类。它不显式保留二维邻域，因此作为对位置变化较敏感的下界对照。
 
-\subsection{Tiny ViT}
-\placeholder{填写 patch embedding、位置编码、Transformer encoder、CLS token 与分类头。}
+CNN 使用两层 ``Conv($3\times3$)--ReLU--MaxPool''，通道数依次为 32 和 64，随后连接 128 维全连接分类头。卷积核的局部连接与权重共享提供了平移相关的归纳偏置，因此 CNN 是检验 ViT 是否真正带来位置收益的必要对照，而不只是一个更高的中心准确率参照。
 
-\begin{figure}[H]
-  \centering
-  \figureplaceholder{替换为 Tiny ViT 结构图。}
-  \caption{Tiny ViT 模型结构}
-  \label{fig:vit-architecture}
-\end{figure}
+\subsection{Tiny ViT 与位置编码}
+Tiny ViT 先用大小为 $7\times7$ 的卷积 patch embedding 将图像划分为 $8\times8=64$ 个 token，token 维度为 64；随后叠加可学习绝对位置编码，输入 2 层、4 头的 Transformer encoder，并用 CLS token 表示全局分类特征。绝对位置编码可帮助模型区分空间坐标，但也可能让模型在中心训练分布中学习到位置先验，这正是 ViT-AbsPos 的观察对象。
 
-\subsection{ViT-MeanPool}
-\placeholder{说明 Mean Pooling 与 CLS Pooling 的差异及实验动机。}
+工程中另保留了 Sin-Cos 位置编码配置，作为后续位置编码消融入口；本报告的六组主实验仍以可学习绝对位置编码为主，以避免额外训练配置混入主对照。
 
-\subsection{HybridConv-ViT}
-\placeholder{填写卷积 stem、patch projection、Transformer encoder 与 Mean Pooling。}
+\subsection{增强、Mean Pooling 与 HybridConv-ViT}
+ViT-Aug 在 ViT-AbsPos 的基础上使用随机位置、旋转、缩放与随机擦除。ViT-MeanPool 进一步将 CLS token 改为所有 patch token 的均值。该改动的动机不是假定平均池化必然更好，而是尝试减少分类头对固定全局 token 的依赖。
 
-\begin{figure}[H]
-  \centering
-  \figureplaceholder{替换为 HybridConv-ViT 结构图。}
-  \caption{HybridConv-ViT 模型结构}
-  \label{fig:hybrid-architecture}
-\end{figure}
+HybridConv-ViT 在 patch embedding 前增加两层卷积 stem（$1\rightarrow32\rightarrow64$，均为 $3\times3$ 卷积和 ReLU），再接相同规模的 Transformer 与 Mean Pooling。它把局部边缘/纹理提取和 token 级全局建模串联起来。由于后续实验同时改变了训练增强、pooling 和 stem，Hybrid 的结果应理解为一个组合方案的表现，而不能分解成某一个模块的严格独立贡献。

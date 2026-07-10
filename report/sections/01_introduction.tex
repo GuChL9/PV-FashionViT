@@ -1,12 +1,22 @@
 \section{项目背景与研究问题}
 
-\placeholder{介绍位置变化对图像分类的意义、选择 FashionMNIST 的原因，以及本项目希望回答的研究问题。}
+标准图像分类数据常把主体放在画面中央，这使得模型在中心测试集上获得较高准确率，却未必说明它能够适应位置改变。在实际拍摄或简单的家庭衣物整理场景中，衣物可能落在画面边缘，也可能因为构图而只显示部分轮廓。我们以 FashionMNIST 为起点，不追求把任务扩展为复杂的真实服饰识别，而是用一个可控的小型数据构造来观察：当图像内容相同、只改变其在画布上的位置时，模型会发生什么变化。
 
-\subsection{研究背景}
-\placeholder{说明标准分类数据的主体位置偏置，以及平移、裁剪和位置编码可能造成的影响。}
+FashionMNIST 是由十类灰度服饰图像组成的公开基准数据集\cite{xiao2017fashion}。它足够轻量，便于在 CPU 上完成多组对照；同时，类别间存在 Shirt、Pullover、Coat 等外形相近的情形，能够暴露边缘裁剪和局部纹理依赖带来的困难。Transformer 的全局 token 交互机制来源于自注意力结构\cite{vaswani2017attention}，Vision Transformer 将其用于图像 patch 序列\cite{dosovitskiy2021image}。本项目并不预设 ViT 一定优于卷积网络，而是把 CNN、普通 ViT 和改进 ViT 放到相同的位置扰动协议下进行探索。
 
 \subsection{研究问题}
-\placeholder{列出需要通过实验回答的问题，例如位置变化的影响、不同架构的稳定性以及数据增强的作用。}
+围绕位置可变性，实验尝试回答以下三个问题：
+\begin{enumerate}
+  \item 当训练和测试位置不一致时，中心准确率会以多大程度转化为大平移和网格位置上的性能？
+  \item 带可学习绝对位置编码、使用 CLS token 的 Tiny ViT 是否会呈现更明显的位置偏置？
+  \item 随机仿射增强、Mean Pooling 与卷积 stem 这三类工程选择，能否使网格上的预测更均匀？
+\end{enumerate}
 
-\subsection{主要贡献}
-\placeholder{用条目概括数据集构造、模型实现、评估协议、工程复现和可视化成果。}
+\subsection{主要工作}
+本项目完成的工作包括：
+\begin{itemize}
+  \item 构造可复现的 PV-FashionMNIST；每个样本记录 $dx$、$dy$、旋转角度和缩放比例；
+  \item 实现 MLP、CNN、Tiny ViT 与 HybridConv-ViT，并以 YAML 配置管理六组主实验；
+  \item 使用 Center、Small Shift、Large Shift 与 $7\times7$ Grid 的组合协议，记录 Robust Drop、逐类准确率和混淆矩阵；
+  \item 将训练曲线、位置热力图、错误样本和 attention rollout 整理为可追溯的图表资产。attention 图仅用于观察模型关注区域，不作为因果解释。
+\end{itemize}

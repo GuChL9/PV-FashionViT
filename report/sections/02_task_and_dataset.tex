@@ -1,24 +1,26 @@
 \section{任务定义与数据集构造}
 
 \subsection{任务定义}
-\placeholder{定义输入、输出类别、画布尺寸、坐标方向和分类目标。}
+原始 FashionMNIST 样本为单通道 $28\times28$ 图像，标签属于十个服饰类别。PV-FashionMNIST 将前景粘贴到全零的 $56\times56$ 画布。以画布中心为基准，$dx>0$ 表示向右移动，$dy>0$ 表示向下移动；模型仍输出同一十类标签。这样，类别本身不变，而位置成为一个可独立操控的变量。
 
-\subsection{数据划分}
-\placeholder{填写训练集、验证集、测试集的来源、规模与固定随机种子。}
+\subsection{数据划分与复现}
+官方训练集的 60,000 张图像按固定随机种子 42 划分为 54,000 张训练样本和 6,000 张验证样本；官方 10,000 张测试样本只用于最终评估。训练时的随机位置由 ``seed + epoch + sample index'' 决定，因此同一配置在单进程或多进程加载下均可复现。训练集每个 epoch 更新位置，而验证与测试使用固定协议。
 
-\subsection{PV-FashionMNIST 构造}
-\placeholder{说明 Center、Small Shift、Large Shift、Grid Shift 和 Affine 模式，以及超出画布边界时的处理。}
+\subsection{位置与复合扰动}
+本项目使用如下几类位置模式：Center 为 $(0,0)$；Small Shift 在 $[-8,8]$ 内均匀采样；Large Shift 在 $[-18,18]$ 内均匀采样；Grid Shift 使用 $\{-18,-12,-6,0,6,12,18\}^2$ 的 49 个固定坐标。对于 Affine 训练模式，图像先在原始 $28\times28$ 前景上做 $\pm10^\circ$ 旋转和 $[0.9,1.1]$ 缩放，再以随机位置粘贴到画布，并以概率 0.25 施加随机擦除。由于无裁剪粘贴的最大位移只有 14 像素，$|dx|$ 或 $|dy|=18$ 会使前景在画布边缘部分截断；这被保留为 Large Shift 难度的一部分，而不是数据错误。
+
+图\ref{fig:data-preview}展示原始样本与五种构造模式。图\ref{fig:position-variation}进一步把同一张图置于九个典型坐标，直观说明本任务既包含纯平移，也在极端位置包含可见区域缩小的情况。
 
 \begin{figure}[H]
   \centering
-  \figureplaceholder{替换为原始样本与位置可变样本对比图。}
-  \caption{PV-FashionMNIST 数据示例}
+  \includegraphics[width=0.98\textwidth]{data_preview.png}
+  \caption{原始 FashionMNIST 与 PV-FashionMNIST 的样本预览。随机平移、网格位置与 Affine 模式共享相同的类别标签，但改变了前景在 $56\times56$ 画布中的位置。}
   \label{fig:data-preview}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \figureplaceholder{替换为同一图像在不同 $(dx,dy)$ 位置下的对比图。}
-  \caption{同一图像的位置变化示例}
+  \includegraphics[width=0.63\textwidth]{position_variation_demo.png}
+  \caption{同一测试样本在九个典型 $(dx,dy)$ 位置下的外观。角落位置可出现边缘截断。}
   \label{fig:position-variation}
 \end{figure}

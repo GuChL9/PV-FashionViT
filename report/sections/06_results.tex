@@ -1,13 +1,43 @@
 \section{实验结果}
 
-\placeholder{仅填写可追溯到配置、日志和 checkpoint 的正式结果；不要使用 smoke test 数值。}
+本节只使用各 run 的正式 checkpoint 与完整网格评估结果，不包含 smoke test。表\ref{tab:main-results}汇总四种位置协议，表\ref{tab:ablation-results}从增强、pooling 与卷积 stem 的组合角度整理结果。
 
 \subsection{主结果}
 \input{tables/main_results}
 
-\subsection{消融结果}
+中心训练的三种基线在 Center 上都达到 $86\%$ 以上，其中 CNN 为 $90.79\%$；但它们在 Large Shift 上分别降至 $13.93\%$、$13.65\%$ 和 $20.76\%$。对应 Robust Drop 分别为 73.55、77.14 和 65.69 个百分点。这个现象并不说明 CNN 或 ViT ``无效''，而是说明中心测试难以暴露训练位置与测试位置不一致的问题。
+
+引入 Affine 训练后，ViT-Aug 与 ViT-MeanPool 的 Grid Accuracy 分别为 $71.52\%$ 与 $71.58\%$，两者的 Center--Large Shift 差接近 0。HybridConv-ViT 的 Grid Accuracy 进一步达到 $85.43\%$，Large Shift Accuracy 为 $85.78\%$。在本次配置中，Hybrid 的中心准确率没有超过 CNN，但其不同位置之间的波动最小；这正是本任务比单点准确率更关心的现象。
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{model_accuracy_comparison.png}
+    \caption*{(a) Center Accuracy}
+  \end{minipage}\hfill
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{robust_drop_comparison.png}
+    \caption*{(b) Robust Drop}
+  \end{minipage}
+  \caption{中心准确率与位置鲁棒性下降的对比。两图的排序不同，提示仅用中心准确率选择模型会遗漏位置敏感性。}
+  \label{fig:main-bars}
+\end{figure}
+
+\subsection{消融视角}
 \input{tables/ablation_results}
+
+从 E3 到 E4，训练分布由 Center 改为 Affine 后，网格平均从 $22.06\%$ 提升到 $71.52\%$；这首先提示训练期位置覆盖可能是最直接的因素。E4 与 E5 的 Grid Accuracy 几乎相同，Mean Pooling 在本次预算下没有带来明显的网格均值提升，但 Large Shift Accuracy 略高。E6 的组合方案在所有位置指标上进一步上升。由于模型之间并非只改动一个变量，这些现象更适合形成后续消融的优先级：先分离增强效应，再单独重复 pooling 与 stem 的比较。
 
 \subsection{类别准确率}
 \input{tables/per_class_accuracy}
-\placeholder{结合该表指出容易混淆的类别，并与错误样本和混淆矩阵对应。}
+
+Large Shift 下，Shirt 是最稳定的困难类别之一：ViT-Aug 与 ViT-MeanPool 的准确率仍只有 $19.10\%$ 和 $15.10\%$；HybridConv-ViT 虽提升至 $58.70\%$，但仍低于其余多数类别。相比之下，Trouser、Sneaker、Bag 和 Ankle boot 在增强模型中更容易保持较高准确率。这种类别差异提示，位置鲁棒性与类别轮廓、局部纹理以及边缘裁剪的可见比例有关，不能只由平均准确率概括。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.86\textwidth]{per_class_accuracy_heatmap.png}
+  \caption{Large Shift 条件下的逐类准确率。浅色到深色表示从低到高的准确率；Shirt 在多种模型中仍较难。}
+  \label{fig:per-class}
+\end{figure}

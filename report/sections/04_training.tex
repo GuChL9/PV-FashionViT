@@ -1,16 +1,17 @@
 \section{训练与评估流程}
 
 \subsection{训练设置}
-\placeholder{填写设备、epoch、batch size、优化器、学习率、权重衰减、scheduler、label smoothing、早停与随机种子。}
+六组主实验均在 CPU 上运行，batch size 为 64，DataLoader 使用单进程，随机种子为 42。优化器采用 AdamW，初始学习率 $3\times10^{-4}$，权重衰减为 0.05；学习率以 cosine scheduler 逐步衰减。交叉熵损失使用 0.1 的 label smoothing，并对梯度范数裁剪到 1.0。每组至多训练 12 个 epoch；在至少训练 5 个 epoch 后，若验证准确率连续 3 个 epoch 未达到最小改进阈值 0.0005，则触发早停。
 
-\subsection{Checkpoint 与日志}
-\placeholder{说明 best/last checkpoint 的选择规则、日志字段和复现实验所需的信息。}
+该设置是一次面向普通 CPU 的工程取舍，并非充分调参后的最优训练方案。不同模型每个 epoch 的耗时差异明显，特别是 HybridConv-ViT 的卷积 stem 与 Transformer 组合更慢；因此本报告更关注同一预算下的趋势，而不把单次成绩视为稳定排名。
+
+\subsection{Checkpoint、日志与复现}
+每轮训练保存包含模型参数、优化器、scheduler、epoch、最佳验证准确率和完整配置的 checkpoint。每个 run 目录还记录 train loss、train accuracy、validation loss、validation accuracy、学习率和 epoch 耗时。最终评估始终加载验证集表现最好的 \texttt{best.pt}，避免使用最后一轮参数替代最佳模型。
 
 \subsection{评估指标}
-\placeholder{定义 Center、Small Shift、Large Shift、Grid Accuracy、Robust Drop、类别准确率和混淆矩阵。}
-
+Center、Small Shift 与 Large Shift Accuracy 分别在对应固定协议的完整测试集上计算。Grid Accuracy 是 49 个固定坐标准确率的宏平均；这比只报告一次随机平移更能显示空间上的局部失效区域。Robust Drop 定义为
 \begin{equation}
-  \text{Robust Drop}
-  = \text{Center Accuracy} - \text{Large Shift Accuracy}.
+  \text{Robust Drop} = \text{Center Accuracy} - \text{Large Shift Accuracy},
   \label{eq:robust-drop}
 \end{equation}
+其单位为百分点。除此之外，项目记录 Large Shift 下的逐类准确率、混淆矩阵以及逐样本预测，以免总体平均掩盖少数类别的失败模式。
