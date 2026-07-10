@@ -14,5 +14,7 @@ jobs:
           python-version: "3.10"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: pytest -q
-
+      - name: Run tests from the repository root
+        run: python -m pytest -q
+        env:
+          PYTHONPATH: ${{ github.workspace }}
