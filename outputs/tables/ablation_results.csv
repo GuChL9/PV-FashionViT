@@ -1,1 +1,7 @@
 model,augmentation,pooling,conv_stem,grid_accuracy,robust_drop
+mlp_center_cpu,center,cls,False,0.1362,0.7355
+cnn_center_cpu,center,cls,False,0.13356530612244896,0.7714000000000001
+vit_abspos_center_cpu,center,cls,False,0.22060816326530613,0.6569
+vit_aug_cpu,affine,cls,False,0.7151693877551021,-0.01870000000000005
+vit_meanpool_cpu,affine,mean,False,0.715838775510204,-0.0121
+hybrid_vit_cpu,affine,mean,True,0.8543469387755102,0.0027000000000000357

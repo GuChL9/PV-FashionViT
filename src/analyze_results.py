@@ -1,31 +1,309 @@
+"""Build clean, report-ready assets from formal experiment outputs.
+
+The script deliberately scans individual run directories instead of trusting
+an append-only CSV.  That makes it safe to run smoke tests in the same project
+and prevents their one-epoch metrics from leaking into report figures.
+"""
+
 from __future__ import annotations
 
+import argparse
+import json
+import math
+import shutil
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import yaml
 
 
-def bar_chart(table, column, title, output):
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.bar(table["model"], table[column])
-    ax.set(title=title, ylabel=column.replace("_", " ").title())
-    ax.tick_params(axis="x", rotation=25)
-    ax.grid(axis="y", alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(output, dpi=180)
-    plt.close(fig)
+DISPLAY_NAMES = {
+    "mlp_center_cpu": "MLP",
+    "cnn_center_cpu": "CNN",
+    "vit_abspos_center_cpu": "ViT-AbsPos",
+    "vit_aug_cpu": "ViT-Aug",
+    "vit_meanpool_cpu": "ViT-MeanPool",
+    "hybrid_vit_cpu": "HybridConv-ViT",
+    "vit_sincos_cpu": "ViT-SinCos",
+}
+CLASS_NAMES = [
+    "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
+    "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot",
+]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Create formal result tables and report figures")
+    parser.add_argument("--root", default="outputs")
+    parser.add_argument("--report-dir", default="report")
+    return parser.parse_args()
+
+
+def _display_name(run_name: str) -> str:
+    return DISPLAY_NAMES.get(run_name, run_name.replace("_", " "))
+
+
+def discover_runs(root: Path):
+    """Read formal runs only; smoke artifacts are intentionally ignored."""
+    records = []
+    for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
+        if run_dir.name.endswith("_smoke"):
+            continue
+        evaluation_path = run_dir / "evaluation.json"
+        config_path = run_dir / "config.yaml"
+        checkpoint = run_dir / "checkpoints" / "best.pt"
+        if not (evaluation_path.exists() and config_path.exists() and checkpoint.exists()):
+            continue
+        with evaluation_path.open(encoding="utf-8") as stream:
+            evaluation = json.load(stream)
+        with config_path.open(encoding="utf-8") as stream:
+            config = yaml.safe_load(stream) or {}
+        summary = evaluation.get("summary", {})
+        if not summary:
+            continue
+        run_name = config.get("run_name", run_dir.name)
+        if run_name.endswith("_smoke"):
+            continue
+        records.append({"run_dir": run_dir, "config": config, "evaluation": evaluation, "summary": summary,
+                        "run_name": run_name, "display_name": _display_name(run_name)})
+    order = {name: index for index, name in enumerate(DISPLAY_NAMES)}
+    return sorted(records, key=lambda row: (order.get(row["run_name"], len(order)), row["run_name"]))
+
+
+def to_percent(value) -> str:
+    return "--" if value is None or not math.isfinite(float(value)) else f"{100 * float(value):.2f}\\%"
+
+
+def write_latex_table(path: Path, caption: str, label: str, headers: list[str], rows: list[list[str]]):
+    alignment = "l" + "c" * (len(headers) - 1)
+    body = "\n".join("      " + " & ".join(row) + r" \\" for row in rows)
+    content = f"""\\begin{{table}}[H]
+  \\centering
+  \\caption{{{caption}}}
+  \\label{{{label}}}
+  \\resizebox{{\\textwidth}}{{!}}{{%
+    \\begin{{tabular}}{{{alignment}}}
+      \\toprule
+      {' & '.join(headers)} \\\\
+      \\midrule
+{body}
+      \\bottomrule
+    \\end{{tabular}}%
+  }}
+\\end{{table}}
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def bar_chart(table: pd.DataFrame, column: str, title: str, ylabel: str, output: Path):
+    figure, axis = plt.subplots(figsize=(8.6, 4.8))
+    values = table[column] * 100
+    bars = axis.bar(table["display_name"], values, color="#3B82B6")
+    for bar, value in zip(bars, values):
+        if np.isfinite(value):
+            axis.text(bar.get_x() + bar.get_width() / 2, value, f"{value:.1f}", ha="center", va="bottom", fontsize=8)
+    axis.set(title=title, ylabel=ylabel)
+    axis.tick_params(axis="x", rotation=20)
+    axis.grid(axis="y", alpha=0.25)
+    figure.tight_layout()
+    figure.savefig(output, dpi=220)
+    plt.close(figure)
+
+
+def annotation_color(cmap, value: float, vmin: float = 0.0, vmax: float = 1.0) -> str:
+    """Choose the higher-contrast black/white label for a heatmap cell."""
+    rgba = plt.get_cmap(cmap)(plt.Normalize(vmin=vmin, vmax=vmax)(value))
+    rgb = np.asarray(rgba[:3])
+    linear_rgb = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    luminance = float(np.dot(linear_rgb, [0.2126, 0.7152, 0.0722]))
+    black_contrast = (luminance + 0.05) / 0.05
+    white_contrast = 1.05 / (luminance + 0.05)
+    return "black" if black_contrast >= white_contrast else "white"
+
+
+def grid_panel(records, output: Path):
+    count = len(records)
+    columns = 3
+    rows = math.ceil(count / columns)
+    figure, axes = plt.subplots(
+        rows,
+        columns,
+        figsize=(14.2, 9.4),
+        squeeze=False,
+        layout="constrained",
+    )
+    image = None
+    for axis in axes.flat[count:]:
+        axis.set_axis_off()
+    for axis, record in zip(axes.flat, records):
+        axis.set_axis_on()
+        grid_path = record["run_dir"] / "tables" / "grid_accuracy.csv"
+        if not grid_path.exists():
+            axis.text(0.5, 0.5, "Grid evaluation missing", ha="center", va="center")
+            axis.set_title(record["display_name"], pad=10)
+            continue
+        grid = pd.read_csv(grid_path)
+        values = sorted(grid["dx"].unique())
+        lookup = {(int(row.dx), int(row.dy)): float(row.accuracy) for row in grid.itertuples()}
+        matrix = np.array([[lookup[(dx, dy)] for dx in values] for dy in values])
+        image = axis.imshow(matrix, vmin=0, vmax=1, cmap="viridis")
+        axis.set(title=record["display_name"], xlabel="dx", ylabel="dy",
+                 xticks=range(len(values)), yticks=range(len(values)), xticklabels=values, yticklabels=values)
+        axis.set_title(record["display_name"], pad=10)
+        axis.xaxis.labelpad = 2
+        axis.yaxis.labelpad = 2
+        for iy, row in enumerate(matrix):
+            for ix, value in enumerate(row):
+                axis.text(
+                    ix,
+                    iy,
+                    f"{value:.2f}",
+                    ha="center",
+                    va="center",
+                    color=annotation_color("viridis", value),
+                    fontsize=7,
+                )
+    if image is not None:
+        figure.colorbar(image, ax=axes.ravel().tolist(), label="Accuracy", shrink=0.9, pad=0.02)
+    figure.suptitle("Position-grid accuracy across formal experiments", fontsize=16)
+    figure.savefig(output, dpi=220)
+    plt.close(figure)
+
+
+def training_overview(records, output: Path):
+    figure, axes = plt.subplots(1, 2, figsize=(12, 4.4))
+    for record in records:
+        history_path = record["run_dir"] / "logs" / "history.csv"
+        if not history_path.exists():
+            continue
+        history = pd.read_csv(history_path)
+        axes[0].plot(history["epoch"], history["val_accuracy"], marker="o", ms=2.5, label=record["display_name"])
+        axes[1].plot(history["epoch"], history["val_loss"], marker="o", ms=2.5, label=record["display_name"])
+    axes[0].set(title="Validation accuracy", xlabel="Epoch", ylabel="Accuracy")
+    axes[1].set(title="Validation loss", xlabel="Epoch", ylabel="Loss")
+    for axis in axes:
+        axis.grid(alpha=0.25)
+        axis.legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(output, dpi=220)
+    plt.close(figure)
+
+
+def per_class_heatmap(per_class: pd.DataFrame, output: Path):
+    matrix = per_class.drop(columns="class").to_numpy(dtype=float).T
+    figure, axis = plt.subplots(figsize=(11.5, 4.8))
+    image = axis.imshow(matrix, vmin=0, vmax=1, cmap="YlGnBu", aspect="auto")
+    figure.colorbar(image, ax=axis, label="Large-shift accuracy")
+    axis.set(yticks=range(len(per_class.columns) - 1), yticklabels=per_class.columns[1:],
+             xticks=range(len(CLASS_NAMES)), xticklabels=CLASS_NAMES, xlabel="Class", ylabel="Model")
+    plt.setp(axis.get_xticklabels(), rotation=35, ha="right")
+    for iy, row in enumerate(matrix):
+        for ix, value in enumerate(row):
+            axis.text(ix, iy, f"{value:.2f}", ha="center", va="center", fontsize=6.5,
+                      color=annotation_color("YlGnBu", value))
+    figure.tight_layout()
+    figure.savefig(output, dpi=220)
+    plt.close(figure)
+
+
+def copy_if_present(source: Path, destination: Path):
+    if source.exists():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def grid_accuracy_from_run(record) -> float:
+    """Prefer the concrete 49-row CSV over an older summary JSON value."""
+    grid_path = record["run_dir"] / "tables" / "grid_accuracy.csv"
+    if grid_path.exists():
+        grid = pd.read_csv(grid_path)
+        if len(grid) == 49 and "accuracy" in grid:
+            return float(grid["accuracy"].mean())
+    return float(record["summary"].get("grid_accuracy", float("nan")))
 
 
 def main():
-    root = Path("outputs")
-    table = pd.read_csv(root / "tables" / "main_results.csv")
-    figures = root / "figures"
-    figures.mkdir(parents=True, exist_ok=True)
-    bar_chart(table, "center_accuracy", "Center Accuracy by Model", figures / "model_accuracy_comparison.png")
-    bar_chart(table, "robust_drop", "Robust Drop by Model", figures / "robust_drop_comparison.png")
+    args = parse_args()
+    root, report_dir = Path(args.root), Path(args.report_dir)
+    tables_dir, figures_dir = root / "tables", root / "figures"
+    report_tables, report_figures = report_dir / "tables", report_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    records = discover_runs(root)
+    if not records:
+        raise FileNotFoundError("No formal experiment outputs were found")
+
+    main_rows, ablation_rows, per_class = [], [], {name: {"class": name} for name in CLASS_NAMES}
+    all_grid_rows = []
+    for record in records:
+        summary, config = record["summary"], record["config"]
+        grid_accuracy = grid_accuracy_from_run(record)
+        row = {"model": record["run_name"], "display_name": record["display_name"],
+               "center_accuracy": summary["center_accuracy"], "small_shift_accuracy": summary["small_shift_accuracy"],
+               "large_shift_accuracy": summary["large_shift_accuracy"], "grid_accuracy": grid_accuracy,
+               "robust_drop": summary["robust_drop"]}
+        main_rows.append(row)
+        ablation_rows.append({"model": record["run_name"], "display_name": record["display_name"],
+                               "augmentation": config["data"]["train_mode"], "pooling": config["model"].get("pooling", "n/a"),
+                               "conv_stem": config["model"]["name"] == "hybrid_vit", "grid_accuracy": grid_accuracy,
+                               "robust_drop": summary["robust_drop"]})
+        large = record["evaluation"]["conditions"]["large_shift"]["per_class_accuracy"]
+        for class_name, accuracy in zip(CLASS_NAMES, large):
+            per_class[class_name][record["display_name"]] = accuracy
+        grid_path = record["run_dir"] / "tables" / "grid_accuracy.csv"
+        if grid_path.exists():
+            grid = pd.read_csv(grid_path)
+            all_grid_rows.append(grid.assign(model=record["run_name"], display_name=record["display_name"]))
+
+    main_table = pd.DataFrame(main_rows)
+    ablation_table = pd.DataFrame(ablation_rows)
+    per_class_table = pd.DataFrame([per_class[name] for name in CLASS_NAMES])
+    main_table.drop(columns="display_name").to_csv(tables_dir / "main_results.csv", index=False)
+    ablation_table.drop(columns="display_name").to_csv(tables_dir / "ablation_results.csv", index=False)
+    per_class_table.to_csv(tables_dir / "per_class_accuracy.csv", index=False)
+    if all_grid_rows:
+        pd.concat(all_grid_rows, ignore_index=True).drop(columns="display_name").to_csv(tables_dir / "grid_accuracy.csv", index=False)
+
+    write_latex_table(
+        report_tables / "main_results.tex", "不同模型的位置鲁棒性结果", "tab:main-results",
+        ["Model", "Center Acc", "Small Shift Acc", "Large Shift Acc", "Grid Acc", "Robust Drop"],
+        [[row.display_name, to_percent(row.center_accuracy), to_percent(row.small_shift_accuracy),
+          to_percent(row.large_shift_accuracy), to_percent(row.grid_accuracy), to_percent(row.robust_drop)]
+         for row in main_table.itertuples()],
+    )
+    write_latex_table(
+        report_tables / "ablation_results.tex", "模型消融实验结果", "tab:ablation-results",
+        ["Model", "Augmentation", "Pooling", "Conv Stem", "Grid Acc", "Robust Drop"],
+        [[row.display_name, row.augmentation, row.pooling, "Yes" if row.conv_stem else "No",
+          to_percent(row.grid_accuracy), to_percent(row.robust_drop)] for row in ablation_table.itertuples()],
+    )
+    write_latex_table(
+        report_tables / "per_class_accuracy.tex", "Large Shift 条件下的类别准确率", "tab:per-class-results",
+        list(per_class_table.columns),
+        [[row["class"], *[to_percent(row[column]) for column in per_class_table.columns[1:]]]
+         for _, row in per_class_table.iterrows()],
+    )
+
+    bar_chart(main_table, "center_accuracy", "Center accuracy by model", "Accuracy (%)", figures_dir / "model_accuracy_comparison.png")
+    bar_chart(main_table, "robust_drop", "Robust drop by model", "Center - large shift (pp)", figures_dir / "robust_drop_comparison.png")
+    bar_chart(main_table, "grid_accuracy", "Grid accuracy by model", "Accuracy (%)", figures_dir / "grid_accuracy_comparison.png")
+    grid_panel(records, figures_dir / "grid_accuracy_panel.png")
+    training_overview(records, figures_dir / "training_curves_overview.png")
+    per_class_heatmap(per_class_table, figures_dir / "per_class_accuracy_heatmap.png")
+
+    for name in ["data_preview.png", "position_variation_demo.png", "model_accuracy_comparison.png", "robust_drop_comparison.png",
+                 "grid_accuracy_comparison.png", "grid_accuracy_panel.png", "training_curves_overview.png", "per_class_accuracy_heatmap.png"]:
+        copy_if_present(figures_dir / name, report_figures / name)
+    final_record = max(records, key=lambda row: row["summary"]["large_shift_accuracy"])
+    for name in ["confusion_matrix.png", "misclassified_examples.png", "grid_accuracy_heatmap.png", "attention_rollout_center.png", "attention_rollout_grid_shift.png"]:
+        copy_if_present(final_record["run_dir"] / "figures" / name, report_figures / f"final_{name}")
+    print(f"Prepared {len(records)} formal runs; best large-shift model: {final_record['display_name']}")
 
 
 if __name__ == "__main__":
     main()
-

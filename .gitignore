@@ -6,6 +6,7 @@ __pycache__/
 tmp/
 data/*
 !data/.gitkeep
+outputs/
 outputs/checkpoints/*
 !outputs/checkpoints/.gitkeep
 outputs/logs/*

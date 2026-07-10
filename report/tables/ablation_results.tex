@@ -7,9 +7,12 @@
       \toprule
       Model & Augmentation & Pooling & Conv Stem & Grid Acc & Robust Drop \\
       \midrule
-      \fieldplaceholder{设置 1} & -- & -- & -- & -- & -- \\
-      \fieldplaceholder{设置 2} & -- & -- & -- & -- & -- \\
-      \fieldplaceholder{设置 3} & -- & -- & -- & -- & -- \\
+      MLP & center & cls & No & 13.62\% & 73.55\% \\
+      CNN & center & cls & No & 13.36\% & 77.14\% \\
+      ViT-AbsPos & center & cls & No & 22.06\% & 65.69\% \\
+      ViT-Aug & affine & cls & No & 71.52\% & -1.87\% \\
+      ViT-MeanPool & affine & mean & No & 71.58\% & -1.21\% \\
+      HybridConv-ViT & affine & mean & Yes & 85.43\% & 0.27\% \\
       \bottomrule
     \end{tabular}%
   }

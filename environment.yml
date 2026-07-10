@@ -13,4 +13,5 @@ dependencies:
   - tqdm>=4.66
   - tensorboard>=2.16
   - pytest>=8
-
+  - fsspec
+  - sympy=1.13.1

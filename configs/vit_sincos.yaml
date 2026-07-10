@@ -1,0 +1,9 @@
+_base_: base.yaml
+run_name: vit_sincos_cpu
+data:
+  train_mode: affine
+  random_erasing_prob: 0.25
+model:
+  name: vit
+  pooling: mean
+  positional_encoding: sincos

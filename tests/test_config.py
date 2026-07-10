@@ -18,3 +18,9 @@ def test_gpu_profile_keeps_full_model():
     assert config["model"]["embed_dim"] == 128
     assert config["model"]["depth"] == 4
     assert config["train"]["epochs"] == 30
+
+
+def test_sincos_profile_is_explicit():
+    config = load_config("configs/vit_sincos.yaml")
+    assert config["model"]["positional_encoding"] == "sincos"
+    assert config["model"]["pooling"] == "mean"
