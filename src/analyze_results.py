@@ -394,6 +394,7 @@ def main():
     per_class_heatmap(per_class_table, figures_dir / "per_class_accuracy_heatmap.png")
 
     for name in ["data_preview.png", "position_variation_demo.png", "angle_variation_demo.png",
+                 "perturbation_distribution.png",
                  "model_accuracy_comparison.png", "robust_drop_comparison.png",
                  "grid_accuracy_comparison.png", "rotation_accuracy_comparison.png", "angle_robustness_heatmap.png",
                  "angle_robustness_polar.png", "grid_accuracy_panel.png",

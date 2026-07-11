@@ -53,13 +53,15 @@
     \node[font=\scriptsize\bfseries, text=PVGold, above=2mm of mean] {E5};
     \node[font=\scriptsize\bfseries, text=PVGreen, above=2mm of hybrid] {E6};
   \end{tikzpicture}
-  \caption{六组模型的对照关系与 ViT 改进路径。上方比较基础架构，下方表示从 E3 到 E6 的连续改进。}
+  \caption{六组模型的对照关系与 ViT 改进路径}
   \label{fig:model-evolution}
 \end{figure}
 
 \subsection{MLP：没有空间结构的参照}
 
 MLP 将 $56\times56$ 输入直接展平成 3,136 维向量，经过 256 维隐藏层、ReLU、Dropout 和十类线性分类头。展平以后，每个像素坐标对应独立的输入权重，同一轮廓平移后会激活完全不同的一组连接。它的作用不是争取最高成绩，而是提供一个几乎不具备二维局部归纳偏置的下界参照。如果连 MLP 都能适应位置变化，说明任务本身过于容易；反之，它的退化模式可以帮助判断训练分布偏置有多强。
+
+从运算上看，每个全连接层执行 $h^{(l+1)}=\phi(W^{(l)}h^{(l)}+b^{(l)})$：矩阵 $W$ 对像素特征作加权组合，偏置 $b$ 调整激活阈值，ReLU $\phi(a)=\max(0,a)$ 使网络能够形成非线性分类边界。若移除 ReLU，多层线性映射仍可合并为一个矩阵，增加层数也无法表达更复杂的类别区域。这里的 \texttt{Flatten} 还使 $W$ 的每一列固定对应某个像素坐标，正是 MLP 容易依赖中心布局的原因。
 
 \begin{lstlisting}[style=pvpython,caption={MLP 基线的核心结构。输入被直接展平后完成两层线性分类。},label={lst:mlp}]
 class MLPClassifier(nn.Module):
@@ -78,9 +80,18 @@ class MLPClassifier(nn.Module):
         return self.net(x)
 \end{lstlisting}
 
+代码\ref{lst:mlp}中的 \texttt{Flatten} 只重排元素，却删除了显式二维邻接；两个 \texttt{Linear} 分别实现前述 $Wh+b$，ReLU 提供非线性。实现最终把图像张量映射为十类 logits，实验上重点观察缺少空间共享时的退化。
+
 \subsection{CNN：局部连接与权值共享基线}
 
 CNN 使用两组 ``$3\times3$ Conv--ReLU--MaxPool''，通道数由 1 增至 32、再增至 64，之后连接 128 维全连接层和分类头。卷积核在不同坐标共享参数，因此相同局部纹理移动后仍能产生相似响应；池化也为小范围平移提供一定容忍度。不过，后端全连接层仍接收固定位置的特征图，极端平移和裁剪也会改变可见内容，所以 CNN 并不具备严格的平移不变性。它是本项目的重要强基线：ViT 的结果只有放在 CNN 旁边，才能判断全局 token 建模是否真正带来额外价值。
+
+对应到数学形式，输出特征 $Y_{c,i,j}$ 是局部邻域的加权和：
+\[
+  Y_{c,i,j}=\phi\!\left(b_c+\sum_{c'}\sum_{m,n}
+  K_{c,c',m,n}X_{c',i+m,j+n}\right).
+\]
+卷积核 $K$ 不随 $(i,j)$ 改变，因此同一袖口或鞋底边缘移动后仍由相同参数检测；MaxPool 再保留邻域内的最强响应。这个公式解释的是平移等变和局部容忍，而不是严格不变：边界填充、裁剪以及后端全连接层仍保留位置影响。
 
 \begin{lstlisting}[style=pvpython,caption={CNN 基线的特征提取与分类路径。卷积共享和池化构成其主要空间先验。},label={lst:cnn}]
 self.features = nn.Sequential(
@@ -99,9 +110,18 @@ def forward(self, x):
     return self.classifier(self.features(x))
 \end{lstlisting}
 
+代码\ref{lst:cnn}中的 \texttt{Conv2d} 实现上述局部加权和与权值共享，ReLU 产生非线性特征，\texttt{MaxPool2d} 对每个邻域取最大响应。两次池化把空间尺寸降至 $14\times14$，随后全连接层完成十类判别，也解释了该模型为何只有有限的位置容忍度。
+
 \subsection{Tiny ViT：全局交互与绝对位置依赖}
 
 Tiny ViT 使用步长和核大小均为 7 的卷积完成 patch embedding，将 $56\times56$ 图像划分为 $8\times8=64$ 个 token，每个 token 维度为 64。序列经过 2 层 Transformer Encoder，每层包含 4 头自注意力和扩展比例为 2 的前馈网络。ViT-AbsPos 在序列前加入一个可学习 CLS token，并为所有 token 叠加可学习绝对位置编码，最后使用 CLS 输出进行分类。
+
+在每个注意力头中，token 矩阵 $Z$ 先投影为 $Q=ZW_Q$、$K=ZW_K$ 和 $V=ZW_V$，再计算
+\[
+  \operatorname{Attention}(Q,K,V)
+  =\operatorname{softmax}\!\left(\frac{QK^{\mathsf T}}{\sqrt{d_k}}\right)V.
+\]
+$QK^{\mathsf T}$ 给出 64 个 patch 两两之间的相关程度，softmax 将其变为信息汇聚权重，因而角落 token 可以直接利用远处 token 的信息。但该运算本身不知道二维顺序，项目必须叠加位置编码；这也解释了全局交互为何不自动带来位置不变性。
 
 自注意力允许任意 patch 交换信息，但 token 在进入 Encoder 前已经与固定网格坐标绑定。可学习绝对位置编码能够帮助模型区分“上方”和“下方”，同时也可能在中心训练数据上形成强位置先验。因此，ViT-AbsPos 的实验目的不是证明绝对位置编码一定有害，而是观察它在训练位置单一时会呈现怎样的空间响应。
 
@@ -122,6 +142,8 @@ def forward_features(self, x):
 def forward(self, x):
     return self.head(self.forward_features(x))
 \end{lstlisting}
+
+代码\ref{lst:vit}先把图像映射为 64 个 patch token，\texttt{x + self.pos\_embed} 注入坐标信息，Encoder 内部完成多头注意力和逐 token 前馈运算。最后选择 CLS 或 token 均值，把序列归约为十类 logits；这里真正影响实验假设的是信息交互和聚合规则，而不是接口形状本身。
 
 代码\ref{lst:vit}同时服务于三个正式模型。ViT-AbsPos 使用 Center 数据和 CLS 分支；ViT-Aug 不修改网络代码，只通过 YAML 把训练模式切换为 Shift+Rotation 并打开随机擦除；ViT-MeanPool 再把 \texttt{pooling} 从 \texttt{cls} 改为 \texttt{mean}。这种复用避免为相近变体复制三份模型实现。
 
@@ -160,5 +182,7 @@ def forward(self, x):
     pooled = x.mean(dim=1)
     return self.head(pooled)
 \end{lstlisting}
+
+代码\ref{lst:hybrid}先用共享卷积提取局部边缘和纹理，再把特征图投影为 token；Transformer 负责远距离关系，Mean Pooling 负责全局归约。它没有另设损失函数，而是把卷积的局部先验与注意力的全局加权组合在同一个可微分类函数中。
 
 这一步针对 FashionMNIST 的数据特点：灰度图像尺寸小，类别判断高度依赖边缘、鞋底形状、袖口和衣身轮廓。纯 ViT 需要从有限样本中同时学习局部模式和全局关系，而卷积 stem 预先提供局部连接与权值共享，再由 Transformer 组合远距离信息。Hybrid 的参数量增至 291,402，但仍明显小于两个传统基线。需要注意的是，E6 相对 E3 同时改变了增强、pooling 和 stem，因此它代表一个组合方案；卷积 stem 的独立贡献仍需更严格的控制实验确认。

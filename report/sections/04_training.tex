@@ -42,9 +42,53 @@
         label={[font=\scriptsize\bfseries, text=PVTeal]below left:评估与发布阶段}] {};
     \end{scope}
   \end{tikzpicture}
-  \caption{主训练与测试流水线。耗时评估与训练解耦，但所有结果都追溯到同一最佳 checkpoint。}
+  \caption{主训练与测试流水线：耗时评估与训练解耦，但所有结果都追溯到同一最佳 checkpoint}
   \label{fig:experiment-pipeline}
 \end{figure}
+
+\subsection{从分类损失到参数更新}
+
+\paragraph{分类与交叉熵}对一个含 $B$ 个样本的 batch，模型输出 logits $z_i=f_{\theta}(x_i)\in\mathbb{R}^{10}$。softmax 将任意实数映射为和为 1 的类别概率：
+\[
+  p_{i,k}=\frac{\exp(z_{i,k})}{\sum_{j=1}^{10}\exp(z_{i,j})}.
+\]
+预测类别为 $\hat y_i=\arg\max_k z_{i,k}$；由于 softmax 保持大小顺序，对 logits 或概率取最大值结果相同。Accuracy 统计 $\hat y_i=y_i$ 的比例，但它是离散指标，不能直接提供平滑梯度，因此训练使用交叉熵。设 label smoothing 系数为 $\varepsilon=0.1$、类别数为 $C=10$，平滑目标和 batch 损失为
+\[
+  q_{i,k}=(1-\varepsilon)\mathbf{1}[k=y_i]+\frac{\varepsilon}{C},
+  \qquad
+  \mathcal L=-\frac{1}{B}\sum_{i=1}^{B}\sum_{k=1}^{C}q_{i,k}\log p_{i,k}.
+\]
+交叉熵对 logits 的导数具有直观形式 $\partial\mathcal L/\partial z_{i,k}=(p_{i,k}-q_{i,k})/B$：预测概率高于目标时梯度推动对应 logit 降低，反之则推动它升高。label smoothing 不改变分类标签，而是避免模型被要求把真值概率推到绝对 1。
+
+\paragraph{链式法则与反向传播}网络是多层函数复合 $z=f_L\circ\cdots\circ f_1(x)$。链式法则把输出端误差逐层传回：
+\[
+  \delta^{(L)}=\frac{\partial\mathcal L}{\partial z},\qquad
+  \delta^{(l)}=\delta^{(l+1)}
+  \frac{\partial h^{(l+1)}}{\partial h^{(l)}},\qquad
+  \frac{\partial\mathcal L}{\partial\theta_l}
+  =\delta^{(l+1)}\frac{\partial h^{(l+1)}}{\partial\theta_l}.
+\]
+卷积、矩阵乘法、ReLU、softmax 和 pooling 都在前向过程中记录局部运算关系，PyTorch 的自动微分据此计算向量--雅可比乘积，而不需要显式构造巨大的完整雅可比矩阵。\texttt{loss.backward()}完成的正是这一反向递推。
+
+\paragraph{梯度下降与小批量学习}最基本的梯度下降更新为
+\[
+  \theta_{t+1}=\theta_t-\eta\nabla_\theta\mathcal L(\theta_t),
+\]
+其中学习率 $\eta$ 控制步长。项目使用 mini-batch 梯度作为全训练集梯度的近似，使每次更新的计算量可控；AdamW 再利用梯度的一阶、二阶动量自适应各参数步长，并将 weight decay 与梯度更新分离。CosineAnnealing 随 epoch 降低学习率，梯度裁剪则在范数过大时按比例缩放，减少不稳定的大步更新。
+
+在实现层面，训练模式启用 Dropout 等随机层；验证和测试切换到 \texttt{eval()} 并关闭梯度记录。二者共享同一个 $f_\theta$，区别是训练阶段更新参数，评估阶段只执行前向分类和统计指标。
+
+\begin{lstlisting}[style=pvpython,caption={一个 batch 的训练核心。代码与交叉熵、链式法则和梯度下降更新逐项对应。},label={lst:train-step}]
+model.train()
+optimizer.zero_grad(set_to_none=True)
+logits = model(images)             # [B, 10]
+loss = criterion(logits, labels)   # smoothed cross entropy
+loss.backward()                    # chain-rule gradients
+clip_grad_norm_(model.parameters(), grad_clip)
+optimizer.step()                   # AdamW parameter update
+\end{lstlisting}
+
+代码\ref{lst:train-step}把上述数学关系压缩为一个 batch 的闭环：前向传播构造复合函数，交叉熵产生标量目标，反向传播应用链式法则，优化器沿降低损失的方向更新参数。数据增强只改变 $x$ 的观测分布，不改变十类标签空间、损失定义或这条求导链。
 
 \subsection{训练设置}
 
@@ -63,6 +107,22 @@
 \subsection{评估协议与指标}
 
 基础评估在完整官方测试集上分别构造 Center、Small Shift、Large Shift、Rotation 和 Shift+Rotation 数据。Rotation 表示居中前景在 $[-45^\circ,45^\circ]$ 连续随机旋转；Shift+Rotation 同时随机采样位置和角度。固定位置网格则对 49 个坐标各评估一次完整测试集，固定角度扫描对七个角度分别评估完整测试集。
+
+\begin{table}[H]
+  \centering
+  \caption{旋转相关指标的采样协议与含义。连续随机指标和固定角度汇总来自不同测试构造，不应按同一名称互换。}
+  \label{tab:rotation-protocols}
+  \begin{tabularx}{\textwidth}{p{0.25\textwidth}p{0.31\textwidth}X}
+    \toprule
+    指标 & 角度与位置协议 & 回答的问题 \\
+    \midrule
+    Rotation Accuracy & 居中位置；每个测试样本在 $[-45^\circ,45^\circ]$ 连续采样一次角度 & 随机旋转分布上的总体准确率 \\
+    Fixed-angle Mean & 七个固定角度分别跑完整测试集，再作宏平均 & 各方向等权时的平均水平 \\
+    Fixed-angle Worst & 七个固定角度准确率的最小值 & 已扫描极端方向中的最弱表现 \\
+    Shift+Rotation Accuracy & 位置与角度同时连续随机采样 & 两类扰动共同出现时的总体准确率 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 除 Accuracy 外，项目定义
 \begin{align}

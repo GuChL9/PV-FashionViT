@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 from torchvision.datasets import FashionMNIST
 from torchvision.transforms import functional as TF
 
@@ -90,6 +91,67 @@ def main():
     fig.suptitle("Fixed-angle input sweep", fontsize=12)
     fig.tight_layout()
     fig.savefig(output / "angle_variation_demo.png", dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+    # Visualize the configured perturbation protocols without iterating over the
+    # training set.  This is a distribution audit, not a record of a past run.
+    rng = np.random.default_rng(int(config["seed"]))
+    sample_count = 12000
+    shifts = rng.uniform(-edge, edge, size=(sample_count, 2))
+    angles = rng.uniform(-rotation_degrees, rotation_degrees, size=sample_count)
+    no_crop_limit = (int(data_cfg["canvas_size"]) - 28) / 2
+    small_shift = float(data_cfg["small_shift"])
+
+    fig, (ax_shift, ax_angle) = plt.subplots(
+        1, 2, figsize=(12.2, 4.8), gridspec_kw={"width_ratios": [1.05, 1.25]}
+    )
+    density = ax_shift.hist2d(
+        shifts[:, 0], shifts[:, 1], bins=18,
+        range=[[-edge, edge], [-edge, edge]], cmap="YlGnBu", cmin=1,
+    )
+    fig.colorbar(density[3], ax=ax_shift, fraction=0.046, pad=0.04, label="Samples per bin")
+    for limit, color, style, label in [
+        (no_crop_limit, "#C58B32", "--", "No-crop boundary"),
+        (small_shift, "#4E8B66", ":", "Small-shift boundary"),
+    ]:
+        ax_shift.add_patch(plt.Rectangle(
+            (-limit, -limit), 2 * limit, 2 * limit, fill=False,
+            edgecolor=color, linewidth=1.8, linestyle=style, label=label,
+        ))
+    grid_values = np.asarray(data_cfg["grid_values"], dtype=float)
+    gx, gy = np.meshgrid(grid_values, grid_values)
+    ax_shift.scatter(gx, gy, s=13, c="#243B53", marker="o", alpha=0.75, label="49 fixed grid points")
+    ax_shift.scatter([0], [0], s=95, c="#D64545", marker="*", zorder=5, label="Center")
+    ax_shift.set(
+        title="Translation coverage", xlabel="Horizontal shift dx (pixels)",
+        ylabel="Vertical shift dy (pixels)", xlim=(-edge - 1, edge + 1),
+        ylim=(-edge - 1, edge + 1), aspect="equal",
+    )
+    ax_shift.legend(loc="upper right", fontsize=8, frameon=True)
+
+    bins = np.linspace(-rotation_degrees, rotation_degrees, 19)
+    ax_angle.hist(angles, bins=bins, color="#2F7F83", alpha=0.82, edgecolor="white")
+    ax_angle.axvline(0, color="#D64545", linewidth=1.8, label="Center angle")
+    for index, angle in enumerate(angle_values):
+        ax_angle.axvline(angle, color="#C58B32", linewidth=1.0, linestyle="--", alpha=0.8,
+                         label="7 fixed test angles" if index == 0 else None)
+    ax_angle.set(
+        title="Rotation coverage", xlabel="Rotation angle (degrees)",
+        ylabel="Sample count", xlim=(-rotation_degrees - 2, rotation_degrees + 2),
+    )
+    ax_angle.grid(axis="y", alpha=0.22)
+    ax_angle.legend(loc="upper right", fontsize=8)
+    ax_angle.text(
+        0.02, 0.96,
+        f"Configured random range: [{-rotation_degrees:g} degrees, {rotation_degrees:g} degrees]\n"
+        f"Monte Carlo audit: n={sample_count:,}",
+        transform=ax_angle.transAxes, va="top", ha="left", fontsize=9,
+        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.88,
+              "edgecolor": "#AAB7C4"},
+    )
+    fig.suptitle("Configured perturbation distributions and deterministic evaluation probes", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(output / "perturbation_distribution.png", dpi=180, bbox_inches="tight")
     plt.close(fig)
 
 
