@@ -1,7 +1,7 @@
 _base_: ../base_gpu.yaml
 run_name: hybrid_vit_gpu
 data:
-  train_mode: affine
+  train_mode: shift_rotation
   random_erasing_prob: 0.25
 model:
   name: hybrid_vit

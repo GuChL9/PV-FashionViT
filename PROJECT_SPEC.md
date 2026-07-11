@@ -14,10 +14,12 @@
 ## 增强顺序
 
 仿射旋转/缩放先作用于原始 28x28 前景，随后粘贴到画布，再进行 Random Erasing。`random_shift` 是画布放置策略，不与仿射变换中的二次平移叠加。
+正式增强模型使用 `shift_rotation`：平移范围为 `[-18, 18]`，旋转范围为 `[-45°, 45°]`，不额外混入缩放。固定角度评估使用 `[-45°, -30°, -15°, 0°, 15°, 30°, 45°]`。
 
 ## 指标口径
 
 - Center / Small Shift / Large Shift Accuracy：相应固定测试协议下完整测试集准确率。
+- Rotation Accuracy：居中放置并在 `[-45°, 45°]` 随机旋转时的准确率；固定角度曲线另按七个角度逐点统计。
 - Robust Drop：`Center Accuracy - Large Shift Accuracy`，使用百分点表示。
 - Per-class Accuracy：每类正确数除以该类样本总数；不存在样本时记为 `NaN`。
 - 混淆矩阵按真实类别为行、预测类别为列。

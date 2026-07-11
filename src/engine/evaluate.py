@@ -28,10 +28,13 @@ def evaluate(model, loader, criterion, device, num_classes: int = 10, collect_pr
             labels_cpu, predictions_cpu = labels.cpu().tolist(), predictions.cpu().tolist()
             dx = meta.get("dx", [0] * batch_size)
             dy = meta.get("dy", [0] * batch_size)
+            angle = meta.get("angle", [0.0] * batch_size)
             dx = dx.tolist() if hasattr(dx, "tolist") else dx
             dy = dy.tolist() if hasattr(dy, "tolist") else dy
+            angle = angle.tolist() if hasattr(angle, "tolist") else angle
             records.extend(
-                {"index": offset + i, "target": y, "prediction": p, "dx": dx[i], "dy": dy[i]}
+                {"index": offset + i, "target": y, "prediction": p,
+                 "dx": dx[i], "dy": dy[i], "angle": angle[i]}
                 for i, (y, p) in enumerate(zip(labels_cpu, predictions_cpu))
             )
         offset += batch_size
@@ -43,4 +46,3 @@ def evaluate(model, loader, criterion, device, num_classes: int = 10, collect_pr
         "confusion_matrix": confusion.tolist(),
         "predictions": records,
     }
-

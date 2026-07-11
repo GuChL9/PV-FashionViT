@@ -183,8 +183,12 @@ def training_overview(records, output: Path):
         if not history_path.exists():
             continue
         history = pd.read_csv(history_path)
-        axes[0].plot(history["epoch"], history["val_accuracy"], marker="o", ms=2.5, label=record["display_name"])
-        axes[1].plot(history["epoch"], history["val_loss"], marker="o", ms=2.5, label=record["display_name"])
+        epochs = pd.to_numeric(history["epoch"], errors="coerce").to_numpy(dtype=float)
+        restarts = np.flatnonzero(np.diff(epochs) <= 0) + 1
+        if len(restarts):
+            history = history.iloc[restarts[-1]:].copy()
+        axes[0].plot(history["epoch"], history["val_accuracy"], linewidth=2, label=record["display_name"])
+        axes[1].plot(history["epoch"], history["val_loss"], linewidth=2, label=record["display_name"])
     axes[0].set(title="Validation accuracy", xlabel="Epoch", ylabel="Accuracy")
     axes[1].set(title="Validation loss", xlabel="Epoch", ylabel="Loss")
     for axis in axes:
@@ -192,6 +196,80 @@ def training_overview(records, output: Path):
         axis.legend(fontsize=8)
     figure.tight_layout()
     figure.savefig(output, dpi=220)
+    plt.close(figure)
+
+
+def angle_robustness_heatmap(records, output: Path):
+    """Plot fixed-angle accuracy as concentric fan sectors plus mean bars."""
+    tables, observed_angles = [], set()
+    for record in records:
+        angle_path = record["run_dir"] / "tables" / "angle_accuracy.csv"
+        if not angle_path.exists():
+            continue
+        table = pd.read_csv(angle_path).sort_values("angle")
+        if table.empty:
+            continue
+        observed_angles.update(table["angle"].to_numpy(dtype=float))
+        tables.append((record, table.set_index("angle")))
+    if not tables:
+        return
+    angles = sorted(observed_angles)
+    matrix, labels = [], []
+    for record, table in tables:
+        values = np.array([float(table.loc[angle, "accuracy"]) for angle in angles]) * 100
+        matrix.append(values)
+        labels.append(record["display_name"])
+    matrix = np.asarray(matrix)
+    means = matrix.mean(axis=1)
+    angle_array = np.asarray(angles, dtype=float)
+    midpoints = (angle_array[:-1] + angle_array[1:]) / 2
+    theta_edges = np.concatenate((
+        [angle_array[0] - (midpoints[0] - angle_array[0])],
+        midpoints,
+        [angle_array[-1] + (angle_array[-1] - midpoints[-1])],
+    ))
+    theta_edges = np.deg2rad(theta_edges)
+    inner_radius = 3.0
+    radial_edges = inner_radius + np.arange(len(labels) + 1, dtype=float)
+
+    figure = plt.figure(figsize=(12, 9.2), layout="constrained")
+    grid = figure.add_gridspec(2, 1, height_ratios=[4.8, 1.35])
+    axis = figure.add_subplot(grid[0], projection="polar")
+    mean_axis = figure.add_subplot(grid[1])
+    image = axis.pcolormesh(theta_edges, radial_edges, matrix, vmin=0, vmax=100,
+                            cmap="YlGnBu", edgecolors="white", linewidth=2, shading="flat")
+    axis.set_theta_zero_location("N")
+    axis.set_theta_direction(-1)
+    axis.set_thetamin(float(np.rad2deg(theta_edges[0])))
+    axis.set_thetamax(float(np.rad2deg(theta_edges[-1])))
+    axis.set_xticks(np.deg2rad(angle_array), [f"{angle:+g}°" for angle in angle_array])
+    axis.set_yticks(inner_radius + np.arange(len(labels)) + 0.5, labels)
+    axis.set_rlabel_position(-58)
+    axis.tick_params(axis="y", pad=8, labelsize=9)
+    axis.grid(False)
+    axis.spines["polar"].set_visible(False)
+    axis.set_title("Rotation accuracy fan", fontsize=16, fontweight="bold", pad=22)
+    for row, values in enumerate(matrix):
+        for column, value in enumerate(values):
+            axis.text(np.deg2rad(angle_array[column]), inner_radius + row + 0.5, f"{value:.0f}",
+                      ha="center", va="center", fontsize=7.5,
+                      color=annotation_color("YlGnBu", value, 0, 100))
+    colorbar = figure.colorbar(image, ax=axis, pad=0.08, shrink=0.72)
+    colorbar.set_label("Accuracy (%)")
+
+    normalization = plt.Normalize(0, 100)
+    colors = plt.get_cmap("YlGnBu")(normalization(means))
+    bars = mean_axis.bar(labels, means, color=colors, edgecolor="white", linewidth=1.2)
+    for bar, value in zip(bars, means):
+        mean_axis.text(bar.get_x() + bar.get_width() / 2, value + 1.2, f"{value:.1f}%",
+                       ha="center", va="bottom", fontsize=9, fontweight="bold")
+    mean_axis.set_ylim(0, 100)
+    mean_axis.set_ylabel("Mean accuracy (%)")
+    mean_axis.set_title("Average across seven angles", fontsize=12, pad=8)
+    mean_axis.grid(axis="y", alpha=0.2)
+    mean_axis.tick_params(axis="x", rotation=15)
+    mean_axis.spines[["top", "right"]].set_visible(False)
+    figure.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(figure)
 
 
@@ -239,14 +317,17 @@ def main():
         raise FileNotFoundError("No formal experiment outputs were found")
 
     main_rows, ablation_rows, per_class = [], [], {name: {"class": name} for name in CLASS_NAMES}
-    all_grid_rows = []
+    all_grid_rows, all_angle_rows = [], []
     for record in records:
         summary, config = record["summary"], record["config"]
         grid_accuracy = grid_accuracy_from_run(record)
         row = {"model": record["run_name"], "display_name": record["display_name"],
                "center_accuracy": summary["center_accuracy"], "small_shift_accuracy": summary["small_shift_accuracy"],
                "large_shift_accuracy": summary["large_shift_accuracy"], "grid_accuracy": grid_accuracy,
-               "robust_drop": summary["robust_drop"]}
+               "rotation_accuracy": summary.get("rotation_accuracy", float("nan")),
+               "shift_rotation_accuracy": summary.get("shift_rotation_accuracy", float("nan")),
+               "robust_drop": summary["robust_drop"],
+               "rotation_drop": summary.get("rotation_drop", float("nan"))}
         main_rows.append(row)
         ablation_rows.append({"model": record["run_name"], "display_name": record["display_name"],
                                "augmentation": config["data"]["train_mode"], "pooling": config["model"].get("pooling", "n/a"),
@@ -259,6 +340,10 @@ def main():
         if grid_path.exists():
             grid = pd.read_csv(grid_path)
             all_grid_rows.append(grid.assign(model=record["run_name"], display_name=record["display_name"]))
+        angle_path = record["run_dir"] / "tables" / "angle_accuracy.csv"
+        if angle_path.exists():
+            angles = pd.read_csv(angle_path)
+            all_angle_rows.append(angles.assign(model=record["run_name"], display_name=record["display_name"]))
 
     main_table = pd.DataFrame(main_rows)
     ablation_table = pd.DataFrame(ablation_rows)
@@ -268,18 +353,26 @@ def main():
     per_class_table.to_csv(tables_dir / "per_class_accuracy.csv", index=False)
     if all_grid_rows:
         pd.concat(all_grid_rows, ignore_index=True).drop(columns="display_name").to_csv(tables_dir / "grid_accuracy.csv", index=False)
+    if all_angle_rows:
+        pd.concat(all_angle_rows, ignore_index=True).drop(columns="display_name").to_csv(
+            tables_dir / "angle_accuracy.csv", index=False
+        )
 
     write_latex_table(
         report_tables / "main_results.tex", "不同模型的位置鲁棒性结果", "tab:main-results",
-        ["Model", "Center Acc", "Small Shift Acc", "Large Shift Acc", "Grid Acc", "Robust Drop"],
+        ["Model", "Center Acc", "Small Shift Acc", "Large Shift Acc", "Rotation Acc",
+         "Shift+Rotation Acc", "Grid Acc", "Robust Drop", "Rotation Drop"],
         [[row.display_name, to_percent(row.center_accuracy), to_percent(row.small_shift_accuracy),
-          to_percent(row.large_shift_accuracy), to_percent(row.grid_accuracy), to_percent(row.robust_drop)]
+          to_percent(row.large_shift_accuracy), to_percent(row.rotation_accuracy),
+          to_percent(row.shift_rotation_accuracy), to_percent(row.grid_accuracy),
+          to_percent(row.robust_drop), to_percent(row.rotation_drop)]
          for row in main_table.itertuples()],
     )
     write_latex_table(
         report_tables / "ablation_results.tex", "模型消融实验结果", "tab:ablation-results",
         ["Model", "Augmentation", "Pooling", "Conv Stem", "Grid Acc", "Robust Drop"],
-        [[row.display_name, row.augmentation, row.pooling, "Yes" if row.conv_stem else "No",
+        [[row.display_name, str(row.augmentation).replace("_", r"\_"), row.pooling,
+          "Yes" if row.conv_stem else "No",
           to_percent(row.grid_accuracy), to_percent(row.robust_drop)] for row in ablation_table.itertuples()],
     )
     write_latex_table(
@@ -292,12 +385,19 @@ def main():
     bar_chart(main_table, "center_accuracy", "Center accuracy by model", "Accuracy (%)", figures_dir / "model_accuracy_comparison.png")
     bar_chart(main_table, "robust_drop", "Robust drop by model", "Center - large shift (pp)", figures_dir / "robust_drop_comparison.png")
     bar_chart(main_table, "grid_accuracy", "Grid accuracy by model", "Accuracy (%)", figures_dir / "grid_accuracy_comparison.png")
+    bar_chart(main_table, "rotation_accuracy", "Rotation accuracy by model", "Accuracy (%)", figures_dir / "rotation_accuracy_comparison.png")
+    angle_heatmap = figures_dir / "angle_robustness_heatmap.png"
+    angle_robustness_heatmap(records, angle_heatmap)
+    copy_if_present(angle_heatmap, figures_dir / "angle_robustness_polar.png")
     grid_panel(records, figures_dir / "grid_accuracy_panel.png")
     training_overview(records, figures_dir / "training_curves_overview.png")
     per_class_heatmap(per_class_table, figures_dir / "per_class_accuracy_heatmap.png")
 
-    for name in ["data_preview.png", "position_variation_demo.png", "model_accuracy_comparison.png", "robust_drop_comparison.png",
-                 "grid_accuracy_comparison.png", "grid_accuracy_panel.png", "training_curves_overview.png", "per_class_accuracy_heatmap.png"]:
+    for name in ["data_preview.png", "position_variation_demo.png", "angle_variation_demo.png",
+                 "model_accuracy_comparison.png", "robust_drop_comparison.png",
+                 "grid_accuracy_comparison.png", "rotation_accuracy_comparison.png", "angle_robustness_heatmap.png",
+                 "angle_robustness_polar.png", "grid_accuracy_panel.png",
+                 "training_curves_overview.png", "per_class_accuracy_heatmap.png"]:
         copy_if_present(figures_dir / name, report_figures / name)
     final_record = max(records, key=lambda row: row["summary"]["large_shift_accuracy"])
     for name in ["confusion_matrix.png", "misclassified_examples.png", "grid_accuracy_heatmap.png", "attention_rollout_center.png", "attention_rollout_grid_shift.png"]:

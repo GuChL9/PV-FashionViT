@@ -1,17 +1,88 @@
-\section{训练与评估流程}
+\section{工程实现与训练闭环}
+
+\subsection{配置驱动的运行流程}
+
+项目以 \texttt{src/main.py} 作为统一入口。一次正式运行依次完成配置继承、随机种子设置、数据集构建、模型初始化、训练与验证、checkpoint 保存以及多协议测试。公共参数写在 \texttt{configs/base.yaml}，模型配置只覆盖 run name、训练模式和结构差异，减少多份 YAML 之间的隐性偏差。
+
+每次实验写入独立目录 \texttt{outputs/<run\_name>/}，其中包含 \texttt{checkpoints/}、\texttt{logs/}、\texttt{tables/} 和 \texttt{figures/}。训练和耗时较长的 49 点网格测试被拆分：第一阶段批量训练六个模型并完成基础评估，第二阶段加载各自的 \texttt{best.pt} 执行位置网格和固定角度扫描，最后由 \texttt{analyze\_results.py} 从 run 目录重建跨模型表格和报告图片。训练、评估和报告生成因此可以独立重跑，不必为了修改一张图再次训练模型。
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    node distance=6mm and 5mm,
+    stage/.style={rounded corners=3pt, draw, line width=0.75pt, align=center,
+      minimum height=13mm, text width=28mm, inner sep=3pt, font=\small},
+    arrow/.style={-{Stealth[length=2.5mm]}, line width=1pt, draw=PVBlue},
+    note/.style={font=\scriptsize, text=PVMuted, align=center}
+  ]
+    \node[stage, draw=PVBlue, fill=PVBlueLight] (config) {YAML 配置\\数据集与模型};
+    \node[stage, draw=PVBlue, fill=PVBlueLight, right=of config] (train) {训练循环\\loss / accuracy};
+    \node[stage, draw=PVGold, fill=PVGoldLight, right=of train] (valid) {中心验证\\早停与选优};
+    \node[stage, draw=PVGreen, fill=PVGreenLight, right=of valid] (best) {最佳状态\\\texttt{best.pt}};
+
+    \node[stage, draw=PVTeal, fill=PVTealLight, below=12mm of best] (protocol) {测试协议\\平移 / 网格 / 角度};
+    \node[stage, draw=PVTeal, fill=PVTealLight, left=of protocol] (metrics) {指标与记录\\JSON / CSV / 预测};
+    \node[stage, draw=PVGold, fill=PVGoldLight, left=of metrics] (analysis) {自动汇总\\表格与跨模型图};
+    \node[stage, draw=PVGreen, fill=PVGreenLight, left=of analysis] (report) {报告资产\\图片与 LaTeX 表};
+
+    \draw[arrow] (config) -- (train);
+    \draw[arrow] (train) -- (valid);
+    \draw[arrow] (valid) -- (best);
+    \draw[arrow] (best) -- node[right, note]{加载同一\\checkpoint} (protocol);
+    \draw[arrow] (protocol) -- (metrics);
+    \draw[arrow] (metrics) -- (analysis);
+    \draw[arrow] (analysis) -- (report);
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, fill=PVBlueLight!45, draw=PVBorder, dashed,
+        fit=(config)(train)(valid)(best), inner sep=4mm,
+        label={[font=\scriptsize\bfseries, text=PVBlue]above left:训练阶段}] {};
+      \node[rounded corners=5pt, fill=PVTealLight!45, draw=PVBorder, dashed,
+        fit=(protocol)(metrics)(analysis)(report), inner sep=4mm,
+        label={[font=\scriptsize\bfseries, text=PVTeal]below left:评估与发布阶段}] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{主训练与测试流水线。耗时评估与训练解耦，但所有结果都追溯到同一最佳 checkpoint。}
+  \label{fig:experiment-pipeline}
+\end{figure}
 
 \subsection{训练设置}
-六组主实验均在 CPU 上运行，batch size 为 64，DataLoader 使用单进程，随机种子为 42。优化器采用 AdamW，初始学习率 $3\times10^{-4}$，权重衰减为 0.05；学习率以 cosine scheduler 逐步衰减。交叉熵损失使用 0.1 的 label smoothing，并对梯度范数裁剪到 1.0。每组至多训练 12 个 epoch；在至少训练 5 个 epoch 后，若验证准确率连续 3 个 epoch 未达到最小改进阈值 0.0005，则触发早停。
 
-该设置是一次面向普通 CPU 的工程取舍，并非充分调参后的最优训练方案。不同模型每个 epoch 的耗时差异明显，特别是 HybridConv-ViT 的卷积 stem 与 Transformer 组合更慢；因此本报告更关注同一预算下的趋势，而不把单次成绩视为稳定排名。
+六组 CPU 实验使用 batch size 64、单进程 DataLoader 和随机种子 42。优化器为 AdamW，初始学习率 $3\times10^{-4}$，weight decay 为 0.05；CosineAnnealing scheduler 在训练期间逐步降低学习率。损失函数采用带 0.1 label smoothing 的交叉熵，梯度范数裁剪阈值为 1.0。
 
-\subsection{Checkpoint、日志与复现}
-每轮训练保存包含模型参数、优化器、scheduler、epoch、最佳验证准确率和完整配置的 checkpoint。每个 run 目录还记录 train loss、train accuracy、validation loss、validation accuracy、学习率和 epoch 耗时。最终评估始终加载验证集表现最好的 \texttt{best.pt}，避免使用最后一轮参数替代最佳模型。
+每组最多训练 12 个 epoch。至少完成 5 个 epoch 后，如果验证准确率连续 3 轮没有超过当前最佳值 0.0005，则触发早停。ViT-Aug 在本轮于 epoch 7 达到其最佳验证准确率，随后三轮没有满足最小改进要求，因此在 epoch 10 停止；其余正式模型运行到 epoch 12。报告训练图只读取每个 run 最新的一段连续 epoch，旧训练日志不会再被连接到新曲线。
 
-\subsection{评估指标}
-Center、Small Shift 与 Large Shift Accuracy 分别在对应固定协议的完整测试集上计算。Grid Accuracy 是 49 个固定坐标准确率的宏平均；这比只报告一次随机平移更能显示空间上的局部失效区域。Robust Drop 定义为
-\begin{equation}
-  \text{Robust Drop} = \text{Center Accuracy} - \text{Large Shift Accuracy},
-  \label{eq:robust-drop}
-\end{equation}
-其单位为百分点。除此之外，项目记录 Large Shift 下的逐类准确率、混淆矩阵以及逐样本预测，以免总体平均掩盖少数类别的失败模式。
+默认验证集采用 Center 协议。这使早停标准稳定、计算开销较低，但也带来一个值得说明的限制：增强模型的选择依据仍偏向中心位置，而不是 Grid Accuracy 或 Shift+Rotation Accuracy。更严格的后续实验可以增加复合扰动验证集，或同时监控中心准确率和鲁棒性指标。
+
+\subsection{Checkpoint 与日志}
+
+每轮训练都保存 \texttt{last.pt}，验证准确率刷新时保存 \texttt{best.pt}。checkpoint 不只包含模型权重，还包括优化器、scheduler、当前 epoch、最佳验证准确率和完整配置。最终测试始终重新加载 \texttt{best.pt}，保证报告指标对应验证阶段选择出的同一模型状态。
+
+日志逐轮记录 train loss、train accuracy、validation loss、validation accuracy、learning rate 和 epoch time。正式重新训练开始时，当前 run 的旧 history 会被清空，避免多次运行的数据拼接成错误曲线；smoke run 使用独立的 \texttt{\_smoke} 目录，也不会写入正式汇总表。
+
+\subsection{评估协议与指标}
+
+基础评估在完整官方测试集上分别构造 Center、Small Shift、Large Shift、Rotation 和 Shift+Rotation 数据。Rotation 表示居中前景在 $[-45^\circ,45^\circ]$ 连续随机旋转；Shift+Rotation 同时随机采样位置和角度。固定位置网格则对 49 个坐标各评估一次完整测试集，固定角度扫描对七个角度分别评估完整测试集。
+
+除 Accuracy 外，项目定义
+\begin{align}
+  \text{Robust Drop} &= \text{Center Accuracy}-\text{Large Shift Accuracy},\\
+  \text{Rotation Drop} &= \text{Center Accuracy}-\text{Rotation Accuracy}.
+\end{align}
+二者均以百分点表示。正值越大，说明模型从中心分布转移到扰动分布时损失越明显；小幅负值并不表示扰动提高了模型能力，而通常说明增强模型在不同条件下的性能接近，随机测试采样和训练分布差异造成了数个百分点波动。
+
+Grid Accuracy 是 49 个位置准确率的宏平均。项目同时保留网格最小值和最大值用于分析空间平坦性，但主表仍使用平均值，以便与指导文件中的核心口径一致。逐类准确率和混淆矩阵基于 Large Shift 预测统计，逐样本结果还记录 $dx$、$dy$ 和 angle，供错误样本与可视化脚本追溯。
+
+\subsection{可复现运行顺序}
+
+在 Windows PowerShell 中，正式流程由以下命令完成：
+
+\begin{verbatim}
+conda activate pv-vit
+python src/visualize_data.py
+.\scripts\run_all_experiments.ps1
+.\scripts\eval_all_grid.ps1
+python src/visualize_attention_comparison.py
+\end{verbatim}
+
+其中 \texttt{eval\_all\_grid.ps1} 在六组网格和角度评估完成后自动执行结果汇总。报告表格不依赖手工抄录，而是由每个 run 的 \texttt{evaluation.json}、网格 CSV 和角度 CSV 重建，减少旧结果混入新报告的风险。

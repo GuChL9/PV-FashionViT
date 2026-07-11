@@ -1,18 +1,164 @@
-\section{模型设计}
+\section{模型设计与改进思路}
 
-所有模型接收 $[B,1,56,56]$ 张量并输出十类 logits。模型规模有意保持较小，以便将实验重点放在位置协议和结构差异，而非预训练或大规模算力。
+六组模型都接收 $[B,1,56,56]$ 输入并输出十类 logits。模型规模控制在 CPU 可以完成多组实验的范围内，重点不是堆叠参数，而是比较不同空间归纳偏置、训练分布和 token 聚合方式。表\ref{tab:model-scale}给出本轮配置下的可训练参数量。
 
-\subsection{MLP 与 CNN 基线}
-MLP 将图像展平为 3,136 维向量，经 ``Linear(256)--ReLU--Dropout--Linear(10)'' 完成分类。它不显式保留二维邻域，因此作为对位置变化较敏感的下界对照。
+\begin{table}[H]
+  \centering
+  \caption{模型规模与主要结构差异}
+  \label{tab:model-scale}
+  \begin{tabular}{lrlcl}
+    \toprule
+    模型 & 参数量 & 位置编码 & 聚合方式 & 卷积 stem \\
+    \midrule
+    MLP & 805,642 & -- & -- & 否 \\
+    CNN & 1,625,866 & -- & -- & 两层卷积主体 \\
+    ViT-AbsPos / ViT-Aug & 75,146 & Learnable & CLS & 否 \\
+    ViT-MeanPool & 75,018 & Learnable & Mean & 否 \\
+    HybridConv-ViT & 291,402 & Learnable & Mean & 是 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
-CNN 使用两层 ``Conv($3\times3$)--ReLU--MaxPool''，通道数依次为 32 和 64，随后连接 128 维全连接分类头。卷积核的局部连接与权重共享提供了平移相关的归纳偏置，因此 CNN 是检验 ViT 是否真正带来位置收益的必要对照，而不只是一个更高的中心准确率参照。
+图\ref{fig:model-evolution}把六组实验的关系压缩为两条线索：E1--E3 使用相同中心训练分布比较三类基础架构；E3--E6 则沿 ViT 路线依次扩大训练分布、改变聚合方式并加入卷积 stem。后者是一条逐步改进链，而不是六个互不相关的模型。
 
-\subsection{Tiny ViT 与位置编码}
-Tiny ViT 先用大小为 $7\times7$ 的卷积 patch embedding 将图像划分为 $8\times8=64$ 个 token，token 维度为 64；随后叠加可学习绝对位置编码，输入 2 层、4 头的 Transformer encoder，并用 CLS token 表示全局分类特征。绝对位置编码可帮助模型区分空间坐标，但也可能让模型在中心训练分布中学习到位置先验，这正是 ViT-AbsPos 的观察对象。
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    node distance=6mm,
+    model/.style={rounded corners=3pt, draw, line width=0.75pt, align=center,
+      minimum height=13mm, text width=29mm, inner sep=3pt, font=\small},
+    arrow/.style={-{Stealth[length=2.5mm]}, line width=1pt, draw=PVBlue}
+  ]
+    \node[model, draw=PVBlue, fill=PVBlueLight, text width=31mm] (data) {
+      \textbf{Center 训练分布}\\E1--E3};
+    \node[model, draw=PVGold, fill=PVGoldLight, text width=88mm, right=of data] (baseline) {
+      \textbf{基础架构对照}\\MLP（E1）\quad CNN（E2）\quad ViT-AbsPos（E3）};
+    \draw[arrow] (data) -- (baseline);
 
-工程中另保留了 Sin-Cos 位置编码配置，作为后续位置编码消融入口；本报告的六组主实验仍以可学习绝对位置编码为主，以避免额外训练配置混入主对照。
+    \node[model, draw=PVBlue, fill=PVBlueLight, below=13mm of data] (vit) {
+      \textbf{ViT-AbsPos}\\Learnable Pos + CLS};
+    \node[model, draw=PVTeal, fill=PVTealLight, right=of vit] (aug) {
+      \textbf{ViT-Aug}\\+ Shift / Rotation};
+    \node[model, draw=PVGold, fill=PVGoldLight, right=of aug] (mean) {
+      \textbf{ViT-MeanPool}\\CLS $\rightarrow$ Mean};
+    \node[model, draw=PVGreen, fill=PVGreenLight, right=of mean] (hybrid) {
+      \textbf{HybridConv-ViT}\\+ Conv Stem};
+    \draw[arrow] (vit) -- (aug);
+    \draw[arrow] (aug) -- (mean);
+    \draw[arrow] (mean) -- (hybrid);
+    \draw[arrow, dashed] (baseline.south) |- (vit.north);
 
-\subsection{增强、Mean Pooling 与 HybridConv-ViT}
-ViT-Aug 在 ViT-AbsPos 的基础上使用随机位置、旋转、缩放与随机擦除。ViT-MeanPool 进一步将 CLS token 改为所有 patch token 的均值。该改动的动机不是假定平均池化必然更好，而是尝试减少分类头对固定全局 token 的依赖。
+    \node[font=\scriptsize\bfseries, text=PVBlue, above=2mm of vit] {E3};
+    \node[font=\scriptsize\bfseries, text=PVTeal, above=2mm of aug] {E4};
+    \node[font=\scriptsize\bfseries, text=PVGold, above=2mm of mean] {E5};
+    \node[font=\scriptsize\bfseries, text=PVGreen, above=2mm of hybrid] {E6};
+  \end{tikzpicture}
+  \caption{六组模型的对照关系与 ViT 改进路径。上方比较基础架构，下方表示从 E3 到 E6 的连续改进。}
+  \label{fig:model-evolution}
+\end{figure}
 
-HybridConv-ViT 在 patch embedding 前增加两层卷积 stem（$1\rightarrow32\rightarrow64$，均为 $3\times3$ 卷积和 ReLU），再接相同规模的 Transformer 与 Mean Pooling。它把局部边缘/纹理提取和 token 级全局建模串联起来。由于后续实验同时改变了训练增强、pooling 和 stem，Hybrid 的结果应理解为一个组合方案的表现，而不能分解成某一个模块的严格独立贡献。
+\subsection{MLP：没有空间结构的参照}
+
+MLP 将 $56\times56$ 输入直接展平成 3,136 维向量，经过 256 维隐藏层、ReLU、Dropout 和十类线性分类头。展平以后，每个像素坐标对应独立的输入权重，同一轮廓平移后会激活完全不同的一组连接。它的作用不是争取最高成绩，而是提供一个几乎不具备二维局部归纳偏置的下界参照。如果连 MLP 都能适应位置变化，说明任务本身过于容易；反之，它的退化模式可以帮助判断训练分布偏置有多强。
+
+\begin{lstlisting}[style=pvpython,caption={MLP 基线的核心结构。输入被直接展平后完成两层线性分类。},label={lst:mlp}]
+class MLPClassifier(nn.Module):
+    def __init__(self, img_size=56, hidden_dim=256,
+                 num_classes=10, dropout=0.1):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(img_size * img_size, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+\end{lstlisting}
+
+\subsection{CNN：局部连接与权值共享基线}
+
+CNN 使用两组 ``$3\times3$ Conv--ReLU--MaxPool''，通道数由 1 增至 32、再增至 64，之后连接 128 维全连接层和分类头。卷积核在不同坐标共享参数，因此相同局部纹理移动后仍能产生相似响应；池化也为小范围平移提供一定容忍度。不过，后端全连接层仍接收固定位置的特征图，极端平移和裁剪也会改变可见内容，所以 CNN 并不具备严格的平移不变性。它是本项目的重要强基线：ViT 的结果只有放在 CNN 旁边，才能判断全局 token 建模是否真正带来额外价值。
+
+\begin{lstlisting}[style=pvpython,caption={CNN 基线的特征提取与分类路径。卷积共享和池化构成其主要空间先验。},label={lst:cnn}]
+self.features = nn.Sequential(
+    nn.Conv2d(1, 32, 3, padding=1), nn.ReLU(),
+    nn.MaxPool2d(2),
+    nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(),
+    nn.MaxPool2d(2),
+)
+self.classifier = nn.Sequential(
+    nn.Flatten(),
+    nn.Linear(64 * 14 * 14, 128), nn.ReLU(),
+    nn.Dropout(0.1), nn.Linear(128, 10),
+)
+
+def forward(self, x):
+    return self.classifier(self.features(x))
+\end{lstlisting}
+
+\subsection{Tiny ViT：全局交互与绝对位置依赖}
+
+Tiny ViT 使用步长和核大小均为 7 的卷积完成 patch embedding，将 $56\times56$ 图像划分为 $8\times8=64$ 个 token，每个 token 维度为 64。序列经过 2 层 Transformer Encoder，每层包含 4 头自注意力和扩展比例为 2 的前馈网络。ViT-AbsPos 在序列前加入一个可学习 CLS token，并为所有 token 叠加可学习绝对位置编码，最后使用 CLS 输出进行分类。
+
+自注意力允许任意 patch 交换信息，但 token 在进入 Encoder 前已经与固定网格坐标绑定。可学习绝对位置编码能够帮助模型区分“上方”和“下方”，同时也可能在中心训练数据上形成强位置先验。因此，ViT-AbsPos 的实验目的不是证明绝对位置编码一定有害，而是观察它在训练位置单一时会呈现怎样的空间响应。
+
+\begin{lstlisting}[style=pvpython,caption={Tiny ViT 的 patch 序列构造、位置编码和两种聚合分支。},label={lst:vit}]
+def forward_features(self, x):
+    # [B, 1, 56, 56] -> [B, 64, embed_dim]
+    x = self.patch_embed(x)
+    if self.cls_token is not None:
+        cls = self.cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls, x), dim=1)
+
+    x = self.encoder(x + self.pos_embed)
+    x = self.norm(x)
+    if self.pooling == "cls":
+        return x[:, 0]
+    return x.mean(dim=1)
+
+def forward(self, x):
+    return self.head(self.forward_features(x))
+\end{lstlisting}
+
+代码\ref{lst:vit}同时服务于三个正式模型。ViT-AbsPos 使用 Center 数据和 CLS 分支；ViT-Aug 不修改网络代码，只通过 YAML 把训练模式切换为 Shift+Rotation 并打开随机擦除；ViT-MeanPool 再把 \texttt{pooling} 从 \texttt{cls} 改为 \texttt{mean}。这种复用避免为相近变体复制三份模型实现。
+
+项目还实现了二维 Sin-Cos 位置编码。它把横纵坐标映射为多频率正弦和余弦分量，位置之间具有连续的解析关系，不需要为每个格点单独学习向量。Sin-Cos 仍然表达绝对坐标，本身不保证平移或旋转不变；它适合与 Learnable 版本进行位置编码消融。由于本轮六组正式实验尚未训练该配置，Sin-Cos 只保留为后续入口，不进入当前主结果，也不据此作性能结论。
+
+\subsection{第一步改进：扩大训练分布}
+
+ViT-Aug 保持 ViT-AbsPos 的模型结构不变，把训练数据从中心分布改为平移与旋转复合分布，并加入概率为 0.25 的随机擦除。这个阶段优先处理数据问题：如果训练期间从未看到边缘位置或倾斜轮廓，再复杂的结构也很难凭空获得对应鲁棒性。通过保持 75,146 个参数不变，E3 与 E4 的差异主要反映训练分布变化，但随机擦除也同时加入，因此仍不能把全部提升只归因于旋转或平移中的某一项。
+
+旋转范围最终设置为 $[-45^\circ,45^\circ]$。这一范围明显强于最初的轻微角度扰动，能够覆盖肉眼可见的朝向变化；同时没有扩展到倒置服饰，以免任务语义发生不必要改变。
+
+\subsection{第二步改进：从 CLS 到 Mean Pooling}
+
+ViT-MeanPool 删除 CLS token，对 64 个 patch token 的 Encoder 输出求平均，再送入分类头。其余 ViT 结构、位置编码和训练增强与 ViT-Aug 保持一致，因此 E4 与 E5 是六组实验中相对清晰的一组结构对照。
+
+CLS token 是固定的全局信息汇聚点，分类结果取决于注意力层如何把各位置证据传递给它；Mean Pooling 则让每个 patch token 直接参与最终表示，更接近对整张画布上的证据平均投票。该设计不保证一定提升准确率，但可以检验聚合方式是否影响位置分布变化下的稳定性。
+
+\subsection{第三步改进：HybridConv-ViT}
+
+HybridConv-ViT 在 patch embedding 前增加两个带 padding 的 $3\times3$ 卷积层，通道数依次为 32 和 64，再将卷积特征投影成 Transformer token。后续 Encoder、可学习位置编码和 Mean Pooling 与前一阶段保持同一思路。
+
+\begin{lstlisting}[style=pvpython,caption={HybridConv-ViT 的卷积 stem 与 Transformer 聚合核心。},label={lst:hybrid}]
+self.stem = nn.Sequential(
+    nn.Conv2d(1, 32, 3, padding=1), nn.ReLU(),
+    nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(),
+)
+self.patch_embed = nn.Conv2d(
+    64, embed_dim, kernel_size=patch_size,
+    stride=patch_size,
+)
+
+def forward(self, x):
+    x = self.patch_embed(self.stem(x))
+    x = x.flatten(2).transpose(1, 2)
+    x = self.norm(self.encoder(x + self.pos_embed))
+    pooled = x.mean(dim=1)
+    return self.head(pooled)
+\end{lstlisting}
+
+这一步针对 FashionMNIST 的数据特点：灰度图像尺寸小，类别判断高度依赖边缘、鞋底形状、袖口和衣身轮廓。纯 ViT 需要从有限样本中同时学习局部模式和全局关系，而卷积 stem 预先提供局部连接与权值共享，再由 Transformer 组合远距离信息。Hybrid 的参数量增至 291,402，但仍明显小于两个传统基线。需要注意的是，E6 相对 E3 同时改变了增强、pooling 和 stem，因此它代表一个组合方案；卷积 stem 的独立贡献仍需更严格的控制实验确认。

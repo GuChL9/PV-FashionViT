@@ -46,6 +46,7 @@ python src/visualize_data.py
 
 - `outputs/figures/data_preview.png`
 - `outputs/figures/position_variation_demo.png`
+- `outputs/figures/angle_variation_demo.png`
 
 ## 训练
 
@@ -149,6 +150,7 @@ python src/main.py --config configs/gpu/vit_abspos.yaml
 
 - `outputs/tables/main_results.csv`
 - `outputs/tables/grid_accuracy.csv`
+- `outputs/tables/angle_accuracy.csv`
 
 六组实验全部完成后运行：
 
@@ -165,6 +167,7 @@ python src/analyze_results.py
 
 - `outputs/figures/grid_accuracy_panel.png`：六个模型的 7×7 Grid Accuracy heatmap 面板；
 - `outputs/figures/grid_accuracy_comparison.png`：六个模型的 Grid Accuracy 对比；
+- `outputs/figures/angle_robustness_heatmap.png`：固定角度准确率热力图，并附平均与最差角度表现；
 - `outputs/figures/model_accuracy_comparison.png`：Center Accuracy 对比；
 - `outputs/figures/robust_drop_comparison.png`：Robust Drop 对比；
 - `outputs/figures/training_curves_overview.png`：六组验证曲线总览；

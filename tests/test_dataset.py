@@ -40,3 +40,27 @@ def test_fixed_grid_shift_and_clipping():
     assert image.shape == (1, 56, 56)
     assert image.sum() > 0
 
+
+def test_rotation_is_explicit_and_reproducible():
+    first = PVFashionMNIST(ToyFashion(), mode="rotation", rotation_degrees=15, seed=11)
+    second = PVFashionMNIST(ToyFashion(), mode="rotation", rotation_degrees=15, seed=11)
+    image, _, meta = first[4]
+    assert image.shape == (1, 56, 56)
+    assert meta == second[4][2]
+    assert meta["dx"] == meta["dy"] == 0
+    assert 0 < abs(meta["angle"]) <= 15
+    assert meta["scale"] == 1.0
+
+
+def test_shift_rotation_samples_both_transform_types():
+    dataset = PVFashionMNIST(ToyFashion(), mode="shift_rotation", rotation_degrees=12, seed=13)
+    _, _, meta = dataset[7]
+    assert abs(meta["dx"]) <= 18 and abs(meta["dy"]) <= 18
+    assert 0 < abs(meta["angle"]) <= 12
+    assert meta["scale"] == 1.0
+
+
+def test_fixed_rotation_angle():
+    dataset = PVFashionMNIST(ToyFashion(), mode="rotation", fixed_angle=-45, seed=17)
+    _, _, meta = dataset[2]
+    assert meta == {"dx": 0, "dy": 0, "scale": 1.0, "angle": -45.0}

@@ -1,13 +1,18 @@
-\section{实验结果}
+\section{实验结果与量化分析}
 
-本节只使用各 run 的正式 checkpoint 与完整网格评估结果，不包含 smoke test。表\ref{tab:main-results}汇总四种位置协议，表\ref{tab:ablation-results}从增强、pooling 与卷积 stem 的组合角度整理结果。
+本节只使用六个正式 run 的最佳 checkpoint，不包含 smoke test。表\ref{tab:main-results}同时列出平移、旋转和复合扰动结果。由于不同指标回答的问题不同，后续分析不以单列排序代替整体判断。
 
-\subsection{主结果}
+\subsection{主结果：中心高分不等于位置鲁棒}
+
 \input{tables/main_results}
 
-中心训练的三种基线在 Center 上都达到 $86\%$ 以上，其中 CNN 为 $90.79\%$；但它们在 Large Shift 上分别降至 $13.93\%$、$13.65\%$ 和 $20.76\%$。对应 Robust Drop 分别为 73.55、77.14 和 65.69 个百分点。这个现象并不说明 CNN 或 ViT ``无效''，而是说明中心测试难以暴露训练位置与测试位置不一致的问题。
+中心训练的三种基线在 Center 上均达到 $86\%$ 以上，其中 CNN 最高，为 $90.79\%$。一旦测试分布改为 Large Shift，MLP、CNN 和 ViT-AbsPos 分别下降至 $13.93\%$、$13.65\%$ 和 $21.24\%$；对应 Robust Drop 为 73.55、77.14 和 65.43 个百分点。CNN 在中心位置表现最好，却拥有六组中最大的 Robust Drop。这说明局部权值共享可以支持常规分类和小范围模式提取，但不足以抵消固定中心训练、后端固定空间布局以及极端边缘裁剪的共同影响。
 
-引入 Affine 训练后，ViT-Aug 与 ViT-MeanPool 的 Grid Accuracy 分别为 $71.52\%$ 与 $71.58\%$，两者的 Center--Large Shift 差接近 0。HybridConv-ViT 的 Grid Accuracy 进一步达到 $85.43\%$，Large Shift Accuracy 为 $85.78\%$。在本次配置中，Hybrid 的中心准确率没有超过 CNN，但其不同位置之间的波动最小；这正是本任务比单点准确率更关心的现象。
+ViT-AbsPos 的中心准确率低于 CNN 4.12 个百分点，但 Large Shift 和 Grid Accuracy 分别高出 7.59 和 8.78 个百分点。全局 token 交互可能扩大了可利用的空间范围，不过 $65.43$ 个百分点的 Robust Drop 仍然很大。换言之，普通 ViT 并没有因为使用自注意力就自然获得位置不变性；中心训练分布和绝对位置编码依然留下了明显偏置。
+
+增强模型呈现出不同的取舍。ViT-Aug 的 Center Accuracy 只有 $60.31\%$，明显低于三个中心基线，但 Large Shift、Rotation 和 Shift+Rotation Accuracy 都约为 $64\%$。ViT-MeanPool 的对应指标进一步提高到 $63.64\%$、$67.83\%$、$67.35\%$ 和 $67.93\%$。它们的 Robust Drop 和 Rotation Drop 为小幅负值，并不表示扰动让任务更容易，而是说明模型没有把能力集中在中心位置，几个测试分布之间的差异已经缩小到随机采样和分布细节可以影响符号的程度。
+
+HybridConv-ViT 在稳定性和绝对准确率之间取得更好的平衡：Center Accuracy 为 $81.25\%$，Large Shift 为 $81.62\%$，Rotation 为 $82.45\%$，Shift+Rotation 为 $81.18\%$。它没有超过 CNN 的中心成绩，但在四类测试条件下保持在约 $81\%$--$82\%$，更符合本项目对“位置可变分类器”的定义。
 
 \begin{figure}[H]
   \centering
@@ -21,23 +26,50 @@
     \includegraphics[width=\linewidth]{robust_drop_comparison.png}
     \caption*{(b) Robust Drop}
   \end{minipage}
-  \caption{中心准确率与位置鲁棒性下降的对比。两图的排序不同，提示仅用中心准确率选择模型会遗漏位置敏感性。}
+  \caption{中心准确率与大平移鲁棒性下降。CNN 在左图最高，却在右图下降最多，说明两项指标不能互相替代。}
   \label{fig:main-bars}
 \end{figure}
 
-\subsection{消融视角}
+\subsection{从增强到 Hybrid 的逐步变化}
+
 \input{tables/ablation_results}
 
-从 E3 到 E4，训练分布由 Center 改为 Affine 后，网格平均从 $22.06\%$ 提升到 $71.52\%$；这首先提示训练期位置覆盖可能是最直接的因素。E4 与 E5 的 Grid Accuracy 几乎相同，Mean Pooling 在本次预算下没有带来明显的网格均值提升，但 Large Shift Accuracy 略高。E6 的组合方案在所有位置指标上进一步上升。由于模型之间并非只改动一个变量，这些现象更适合形成后续消融的优先级：先分离增强效应，再单独重复 pooling 与 stem 的比较。
+表\ref{tab:ablation-results}按增强、pooling 和卷积 stem 整理六组配置。E3 到 E4 的 Grid Accuracy 从 $22.14\%$ 提升至 $62.29\%$，增加 40.15 个百分点；两者 ViT 结构相同，最显著的变化来自训练分布覆盖。这是当前实验中幅度最大的改进，也说明在位置可变任务里，先让训练集包含目标扰动通常比单纯增大模型更直接。
 
-\subsection{类别准确率}
-\input{tables/per_class_accuracy}
+E4 到 E5 只改变主要聚合策略，Grid Accuracy 从 $62.29\%$ 提升到 $66.20\%$，固定七角度平均准确率从 $61.56\%$ 提升到 $65.36\%$。提升幅度不如数据增强阶段大，但在位置网格和角度扫描中方向一致，支持 Mean Pooling 可能让分类表示较少依赖固定 CLS 汇聚路径这一解释。由于只有单个随机种子，这一约 4 个百分点的差距仍需重复实验验证。
 
-Large Shift 下，Shirt 是最稳定的困难类别之一：ViT-Aug 与 ViT-MeanPool 的准确率仍只有 $19.10\%$ 和 $15.10\%$；HybridConv-ViT 虽提升至 $58.70\%$，但仍低于其余多数类别。相比之下，Trouser、Sneaker、Bag 和 Ankle boot 在增强模型中更容易保持较高准确率。这种类别差异提示，位置鲁棒性与类别轮廓、局部纹理以及边缘裁剪的可见比例有关，不能只由平均准确率概括。
+E5 到 E6 加入卷积 stem 后，Grid Accuracy 增加 14.79 个百分点，七角度平均增加 15.17 个百分点。Hybrid 的提升同时出现在 Center、Large Shift、Rotation 和 Shift+Rotation，说明它并非只优化某一个特定协议。结合参数规模，291,402 参数的 Hybrid 仍小于 MLP 和 CNN，结果更可能与结构先验和训练分布匹配有关，而不只是参数数量增加。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.86\textwidth]{per_class_accuracy_heatmap.png}
-  \caption{Large Shift 条件下的逐类准确率。浅色到深色表示从低到高的准确率；Shirt 在多种模型中仍较难。}
-  \label{fig:per-class}
+  \includegraphics[width=0.78\textwidth]{grid_accuracy_comparison.png}
+  \caption{六组模型的 49 点 Grid Accuracy。中心训练基线与增强模型之间出现明显分层，HybridConv-ViT 取得最高网格平均。}
+  \label{fig:grid-comparison}
 \end{figure}
+
+\subsection{固定角度扫描的量化结果}
+
+随机 Rotation Accuracy 对 $[-45^\circ,45^\circ]$ 连续采样后的结果取平均，适合概括整体水平，却可能掩盖端点失效。七个固定角度的宏平均分别为：MLP $39.50\%$、CNN $45.50\%$、ViT-AbsPos $41.97\%$、ViT-Aug $61.56\%$、ViT-MeanPool $65.36\%$、HybridConv-ViT $80.53\%$。
+
+三个中心训练基线都在 $0^\circ$ 达到各自最高值，并随绝对角度增大迅速下降。CNN 在 $+45^\circ$ 仅为 $10.30\%$，ViT-AbsPos 在 $+45^\circ$ 为 $13.01\%$。相比之下，ViT-Aug 七个角度落在 $52.72\%$--$66.11\%$，ViT-MeanPool 落在 $60.13\%$--$69.71\%$，Hybrid 落在 $74.18\%$--$83.98\%$。增强模型不仅平均值更高，角度间波动也明显更小。正负角度并不完全对称，当前数据不足以确定这是类别方向、插值还是训练采样造成的，因此报告只把它作为可重复观察的现象，不作过度机制解释。
+
+图\ref{fig:rotation-bars}使用连续随机角度协议汇总 Rotation Accuracy，与后文逐角度扇形图形成互补。柱形图更适合快速比较模型的总体旋转表现，而扇形图用于检查平均值是否掩盖极端角度下降。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.76\textwidth]{rotation_accuracy_comparison.png}
+  \caption{六组模型在连续随机旋转协议下的 Rotation Accuracy。增强与 Hybrid 模型在旋转分布上的整体表现更高。}
+  \label{fig:rotation-bars}
+\end{figure}
+
+\subsection{类别层面的困难并未消失}
+
+\input{tables/per_class_accuracy}
+
+Large Shift 下，HybridConv-ViT 在 Trouser、Sandal、Sneaker、Bag 和 Ankle boot 上分别达到 $94.10\%$、$92.00\%$、$91.10\%$、$94.70\%$ 和 $94.70\%$，这些类别通常具有较明确的整体轮廓或局部特征。Shirt 只有 $49.20\%$，是 Hybrid 最困难的类别；Pullover 为 $67.90\%$，T-shirt/top 为 $72.10\%$。
+
+增强并没有以相同幅度改善所有类别。以衬衫类为例，ViT-Aug 的准确率为 $21.70\%$，ViT-MeanPool 反而只有 $14.50\%$，说明聚合策略的总体收益不能直接推广到每个类别。相似上装之间需要依赖领口、袖长和衣身等完整形状，而边缘截断恰好会破坏这些结构。类别结果因此补充了平均指标：位置鲁棒性不仅是模型是否跟随目标移动，也取决于移动后还剩下多少可区分类别的信息。
+
+\subsection{对研究问题的阶段性回答}
+
+第一，位置变化会显著影响分类准确率，而且影响远大于中心模型之间几个百分点的差距。第二，普通 ViT 在网格和旋转测试中略强于另外两个中心基线，但仍存在明显中心偏置，自注意力本身不能保证位置鲁棒。第三，训练分布覆盖带来最大幅度改善，Mean Pooling 提供较小但一致的增量，卷积 stem 与增强、Mean Pooling 的组合在当前实验中表现最稳定。以上判断适用于本轮单种子、CPU 小模型配置，尚不能替代多次重复和完整全因子消融。

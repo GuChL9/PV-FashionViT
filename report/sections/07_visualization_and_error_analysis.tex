@@ -1,27 +1,62 @@
-\section{可视化与错误分析}
+\section{可视化与误差分析}
 
-\subsection{训练过程}
-图\ref{fig:training-curves}汇总六组验证曲线。中心训练的 MLP、CNN 与 ViT-AbsPos 在较早阶段即可达到较高验证准确率；使用 Affine 训练的模型在中心验证上的起点更低，但后续位置测试更稳定。该差异符合一个直观猜测：训练分布更广时，模型未必把能力集中在中心位置。由于每组只运行一次固定种子，曲线仅反映本次训练轨迹，不用于判断统计显著性。
+量化表格给出平均表现，可视化则用于检查平均值是否掩盖局部失效。本节依次观察训练过程、位置响应、角度响应、类别错误和注意力分布。图中结论均与对应 CSV 或预测记录相连，不把展示样本替代总体统计。
+
+\subsection{训练曲线：增强任务更难，但中心验证并非最终目标}
+
+图\ref{fig:training-curves}显示，中心训练的 MLP、CNN 和 ViT-AbsPos 很快达到较高验证准确率，验证损失也较低。ViT-Aug 和 ViT-MeanPool 的中心验证准确率明显较低，这是因为训练样本同时经历大范围平移和旋转，模型需要把有限容量分配给更广的输入分布，而验证集仍保持居中。
+
+HybridConv-ViT 的中心验证曲线高于另外两个增强 ViT，且损失持续下降，说明卷积 stem 在相同增强难度下改善了特征学习。ViT-Aug 在 epoch 7 达到本轮最佳验证准确率，随后三轮没有满足最小改进阈值，于 epoch 10 触发早停；因此其曲线没有 epoch 11 和 12，这是真实训练过程而非日志缺失。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.96\textwidth]{training_curves_overview.png}
-  \caption{六组模型的验证准确率与验证损失曲线。不同模型的单 epoch 耗时不同，横轴只表示训练轮数。}
+  \includegraphics[width=0.98\textwidth]{training_curves_overview.png}
+  \caption{六组模型最新一次正式训练的验证准确率与验证损失。ViT-Aug 因早停只运行 10 个 epoch。}
   \label{fig:training-curves}
 \end{figure}
 
-\subsection{位置网格}
-图\ref{fig:grid-panel}是本项目最直接的空间证据。MLP、CNN 和 ViT-AbsPos 在 $(0,0)$ 附近形成明显高值区，离开中心后大面积接近随机猜测水平。ViT-AbsPos 的高值区相对更宽，但仍随边缘位置迅速下降。相反，ViT-Aug 与 ViT-MeanPool 的热力图在 0.7 左右较为平坦；HybridConv-ViT 在全部 49 个位置上约为 0.83--0.87。这里的平坦性比单一 Grid 平均值更有信息量：它显示该模型并非只在少数偏移坐标上偶然表现良好。
+训练曲线还提示一个重要取舍：如果只根据中心验证准确率判断，增强模型似乎不如中心基线；但位置网格显示相反结论。训练阶段和最终评价目标不完全一致，是后续可以继续改进的工程环节。
+
+\subsection{位置网格：从中心峰值到平坦响应}
+
+图\ref{fig:grid-panel}是回答“位置变化是否影响分类”的核心证据。MLP、CNN 和 ViT-AbsPos 都在 $(0,0)$ 附近形成显著高值区，向四周移动后迅速变浅。MLP 的 49 点准确率范围为 $6.10\%$--$87.48\%$，CNN 为 $2.49\%$--$90.79\%$，ViT-AbsPos 为 $5.86\%$--$86.67\%$。中心测试只取到了这些分布的最高区域，因此会严重高估模型面对任意位置时的水平。
+
+ViT-Aug 的网格范围收缩至 $58.53\%$--$65.36\%$，ViT-MeanPool 为 $60.62\%$--$69.84\%$。两张热力图不再出现突出的中心岛，说明训练期随机位置覆盖确实改变了模型的空间响应。HybridConv-ViT 的 49 点结果进一步集中在 $78.15\%$--$82.65\%$，最差位置与最好位置只相差 4.50 个百分点。与单个 Grid Average 相比，这个范围更直观地说明改进不是由少数容易坐标拉高平均值。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.98\textwidth]{grid_accuracy_panel.png}
-  \caption{六组模型的 $7\times7$ 位置网格准确率。横纵轴为前景相对中心的像素平移。}
+  \includegraphics[width=0.99\textwidth]{grid_accuracy_panel.png}
+  \caption{六组模型的 $7\times7$ 位置网格准确率。横轴和纵轴分别为 $dx$、$dy$，每个单元均来自完整测试集。}
   \label{fig:grid-panel}
 \end{figure}
 
-\subsection{混淆与边缘错误}
-图\ref{fig:confusion-error}给出 HybridConv-ViT 在 Large Shift 下的混淆矩阵和部分错误样本。尽管 Hybrid 的总体准确率较高，Shirt 仍容易与形状相近的上装类别混淆。错误样本中还可看到部分主体被截断，模型只能利用局部边缘或纹理判断类别。因而，极端坐标上的失败不能完全被解释为 ``模型没有学会平移不变性''；可见信息减少同样改变了任务难度。
+边缘区域的下降包含两个来源：模型可能依赖中心位置，也可能因为前景截断而缺少类别信息。增强模型在相同裁剪条件下仍明显更平坦，说明中心偏置确实可以通过训练分布缓解；但网格实验无法把位置偏置和可见信息损失完全分离，这一限制需要在结论中保留。
+
+\subsection{角度扇形图：观察方向、幅度与平均水平}
+
+图\ref{fig:angle-heatmap}把 $-45^\circ$ 到 $45^\circ$ 排成扇形，每个模型占一层环带，单元格数字为该固定角度下的 Accuracy。下方柱状图单独给出七个角度的平均值，避免把平均统计塞入扇形后降低可读性。
+
+三个中心训练基线在 $0^\circ$ 形成深色尖峰，越靠近 $\pm45^\circ$ 越浅。CNN 的七角度平均虽然达到 $45.50\%$，但这是由 $0^\circ$ 的 $90.79\%$ 拉高；其 $+45^\circ$ 只有 $10.30\%$。ViT-Aug 和 ViT-MeanPool 的颜色沿角度方向更均匀，Hybrid 则在所有扇区保持较深颜色。扇形图因此同时呈现了三个信息：中心峰值有多高、极端角度下降多快，以及平均准确率是否由少数角度支撑。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{angle_robustness_heatmap.png}
+  \caption{固定角度扇形热力图与七角度平均准确率。扇形由左至右对应 $-45^\circ$ 到 $45^\circ$，颜色和数字共同表示 Accuracy。}
+  \label{fig:angle-heatmap}
+\end{figure}
+
+\subsection{逐类热力图与混淆结构}
+
+图\ref{fig:per-class}显示 Large Shift 下十个类别并没有同步改善。鞋类、包和裤子在增强模型中形成较稳定的高值区，上装类别仍较困难。尤其是 Shirt 一行在所有模型中都明显偏浅，说明整体 Grid Accuracy 的提高没有消除细粒度类别混淆。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.90\textwidth]{per_class_accuracy_heatmap.png}
+  \caption{Large Shift 条件下的逐类准确率。行列颜色用于比较类别困难度和模型改善幅度。}
+  \label{fig:per-class}
+\end{figure}
+
+HybridConv-ViT 的混淆矩阵进一步给出错误方向。数量最多的非对角项是 Shirt 被预测为 Coat（252 次），其次是 Pullover 被预测为 Coat（167 次）、T-shirt/top 被预测为 Shirt（164 次）以及 Shirt 被预测为 T-shirt/top（115 次）。这些错误集中在轮廓相近的上装类别，符合逐类准确率的观察。鞋类也存在方向更接近的混淆，例如 Sneaker 与 Ankle boot，但数量明显少于上装内部错误。
 
 \begin{figure}[H]
   \centering
@@ -33,25 +68,30 @@
   \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\linewidth]{final_misclassified_examples.png}
-    \caption*{(b) 部分错误样本}
+    \caption*{(b) 典型错误样本}
   \end{minipage}
-  \caption{HybridConv-ViT 在 Large Shift 下的类别混淆与典型错误。}
+  \caption{HybridConv-ViT 在 Large Shift 下的类别混淆与错误样本。}
   \label{fig:confusion-error}
 \end{figure}
 
-\subsection{Attention Rollout 作为辅助观察}
-为避免只展示容易分类的样本，我们从四个角落选择了 ViT-AbsPos 未正确分类而 HybridConv-ViT 正确分类的十个样本，并按不同类别和坐标分布到图\ref{fig:attention-one}与图\ref{fig:attention-two}。图中左列为输入，中列与右列分别为两个模型的 rollout 叠加结果。可以观察到，Hybrid 的高响应通常与当前前景所在角落更一致；ViT-AbsPos 的响应有时扩散到前景之外。不过该图是按预测差异筛选的展示样本，存在选择性，且 attention 权重本身不等同于因果归因。因此它只支持对模型行为的定性讨论，不替代表\ref{tab:main-results}和图\ref{fig:grid-panel}中的量化结论。
+错误样本可以分为两类。一类主体仍较完整，但类别本身相近，例如 Coat 被预测为 Dress、Pullover 或 Shirt；另一类处在 $|dx|$ 或 $|dy|$ 较大的位置，只剩局部鞋面、裤腿或衣身，模型只能根据残留纹理判断。图中也存在 Sandal 与 Sneaker、Sneaker 与 Ankle boot 的互相混淆。这说明部分失败源于类别边界，部分失败来自可见信息减少，不能全部归结为 Transformer 结构。
+
+\subsection{Attention Rollout：只作行为观察}
+
+Attention 对照从四个角落筛选“ViT-AbsPos 分类错误、HybridConv-ViT 分类正确”的样本。图\ref{fig:attention-one}和图\ref{fig:attention-two}每行依次给出输入、ViT-AbsPos rollout 和 Hybrid rollout。Hybrid 的高响应通常更集中于当前前景，例如角落中的鞋面、衣身或裤腿；ViT-AbsPos 的响应有时扩散到前景外的空白区域，或者只覆盖局部边缘。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.84\textwidth]{attention_abspos_vs_hybrid_01.png}
-  \caption{五个边缘位置样本上的 attention rollout 对照（一）。左至右为输入、ViT-AbsPos 与 HybridConv-ViT。}
+  \includegraphics[width=0.82\textwidth]{attention_abspos_vs_hybrid_01.png}
+  \caption{五个边缘位置样本上的 attention rollout 对照（一）。左至右为输入、ViT-AbsPos 和 HybridConv-ViT。}
   \label{fig:attention-one}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.84\textwidth]{attention_abspos_vs_hybrid_02.png}
-  \caption{五个边缘位置样本上的 attention rollout 对照（二）。样本的完整筛选记录保存在项目输出目录。}
+  \includegraphics[width=0.82\textwidth]{attention_abspos_vs_hybrid_02.png}
+  \caption{五个边缘位置样本上的 attention rollout 对照（二）。样本筛选记录保存在输出表格中。}
   \label{fig:attention-two}
 \end{figure}
+
+这组图经过预测差异筛选，本身具有选择性；rollout 也只是注意力权重的传播结果，不等同于特征贡献或因果解释。因此，它只能与网格准确率和错误样本一起作为定性线索，不能单独证明卷积 stem 导致了某种决策机制。

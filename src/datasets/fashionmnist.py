@@ -33,7 +33,7 @@ def _split_train(base: Dataset, val_fraction: float, seed: int) -> tuple[Subset,
     return Subset(base, order[val_size:]), Subset(base, order[:val_size])
 
 
-def _pv(base: Dataset, cfg: dict[str, Any], mode: str, seed: int, fixed_shift=None) -> PVFashionMNIST:
+def _pv(base: Dataset, cfg: dict[str, Any], mode: str, seed: int, fixed_shift=None, fixed_angle=None) -> PVFashionMNIST:
     return PVFashionMNIST(
         base,
         canvas_size=cfg["canvas_size"],
@@ -41,7 +41,9 @@ def _pv(base: Dataset, cfg: dict[str, Any], mode: str, seed: int, fixed_shift=No
         shift_range=ShiftRange(cfg["small_shift"], cfg["large_shift"]),
         grid_values=cfg["grid_values"],
         fixed_shift=fixed_shift,
-        affine_degrees=cfg.get("affine_degrees", 10),
+        fixed_angle=fixed_angle,
+        rotation_degrees=cfg.get("rotation_degrees", cfg.get("affine_degrees", 45)),
+        affine_degrees=cfg.get("affine_degrees", cfg.get("rotation_degrees", 45)),
         affine_scale=tuple(cfg.get("affine_scale", [0.9, 1.1])),
         random_erasing_prob=cfg.get("random_erasing_prob", 0.0) if mode == cfg.get("train_mode") else 0.0,
         seed=seed,
@@ -69,7 +71,7 @@ def build_test_dataset(
     seed: int,
     mode: str = "center",
     fixed_shift: tuple[int, int] | None = None,
+    fixed_angle: float | None = None,
 ) -> PVFashionMNIST:
     base = FashionMNIST(root=Path(cfg["root"]), train=False, download=True)
-    return _pv(base, cfg, mode, seed, fixed_shift=fixed_shift)
-
+    return _pv(base, cfg, mode, seed, fixed_shift=fixed_shift, fixed_angle=fixed_angle)

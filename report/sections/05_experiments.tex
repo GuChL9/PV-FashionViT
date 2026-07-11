@@ -1,25 +1,61 @@
-\section{实验设计}
+\section{实验设计与探索过程}
 
-\subsection{主实验矩阵}
-表\ref{tab:experiment-matrix}给出六组主实验。E1--E3 在中心位置训练，用于先观察不同基本架构受到位置分布变化时的敏感程度；E4--E6 使用 Affine 训练模式，逐步引入 Mean Pooling 与卷积 stem。所有模型都接受相同的四类最终测试协议，从而保证位置评估口径一致。
+\subsection{六组主实验}
+
+表\ref{tab:experiment-matrix}不是简单的模型排行榜，而是对应四个连续问题。E1--E3 先建立中心训练基线；E4 检查扩大训练分布的效果；E5 改变 token 聚合方式；E6 组合局部卷积特征与 Transformer。所有模型使用同一数据划分、优化器和评估协议。
 
 \begin{table}[H]
   \centering
-  \caption{主实验设置}
+  \caption{主实验矩阵及各实验回答的问题}
   \label{tab:experiment-matrix}
-  \begin{tabular}{llll}
-    \toprule
-    编号 & 模型 & 训练数据 & 主要考察点 \\
-    \midrule
-    E1 & MLP & PV-Center & 无空间结构基线 \\
-    E2 & CNN & PV-Center & 局部卷积归纳偏置 \\
-    E3 & ViT-AbsPos & PV-Center & 绝对位置编码与 CLS token \\
-    E4 & ViT-Aug & PV-Affine & 训练期位置与外观增强 \\
-    E5 & ViT-MeanPool & PV-Affine & token 聚合方式 \\
-    E6 & HybridConv-ViT & PV-Affine & 卷积 stem 与 Mean Pooling \\
-    \bottomrule
-  \end{tabular}
+  \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lllll}
+      \toprule
+      编号 & 模型 & 训练分布 & 关键设置 & 主要问题 \\
+      \midrule
+      E1 & MLP & Center & 展平输入 & 缺少空间结构时位置退化有多明显？ \\
+      E2 & CNN & Center & 局部卷积与池化 & 权值共享能否自然抵抗大幅平移？ \\
+      E3 & ViT-AbsPos & Center & Learnable Pos + CLS & 全局交互是否仍会学习中心偏置？ \\
+      E4 & ViT-Aug & Shift+Rotation & CLS + Random Erasing & 只扩大训练分布能改善多少？ \\
+      E5 & ViT-MeanPool & Shift+Rotation & Mean Pooling & 聚合方式是否改善稳定性？ \\
+      E6 & HybridConv-ViT & Shift+Rotation & Conv Stem + Mean & 局部归纳偏置能否继续提升？ \\
+      \bottomrule
+    \end{tabular}%
+  }
 \end{table}
 
-\subsection{分析原则}
-本实验矩阵不是严格的全因子设计：E4--E6 在结构改变之外共享增强训练，Hybrid 还同时使用了 Mean Pooling。因此，表\ref{tab:ablation-results}中的比较用于提出下一步值得验证的假设，而不把所有差值解释为某个单独模块的因果效应。比较时重点查看三条线索：中心与大平移的差距、49 点热力图是否平坦，以及类别层面是否仍存在集中失败。
+\subsection{阶段一：中心基线是否可靠}
+
+最先需要验证的不是某个改进结构，而是原始中心测试是否掩盖问题。E1--E3 的训练图像始终位于中心，测试时逐步扩大平移幅度。如果 Center Accuracy 保持较高而 Grid Accuracy 大幅下降，就能直接说明“会分类”和“能适应位置变化”是两个不同目标。
+
+三种基线覆盖了不同空间假设：MLP 基本不保留二维结构，CNN 具有局部共享，ViT-AbsPos 允许全局 token 交互但显式编码绝对坐标。它们之间的比较用于描述失效形态，而不是仅按中心准确率确定胜负。
+
+\subsection{阶段二：先处理数据分布}
+
+在确认中心偏置后，E4 保持 ViT-AbsPos 的结构和参数量不变，将训练输入改为随机平移与 $\pm45^\circ$ 旋转，并加入随机擦除。这一阶段检验最直接的工程假设：模型只有在训练期看过足够广的位置和角度，才可能在测试时形成平坦响应。
+
+由于 E4 同时包含平移、旋转和擦除，它不是严格的单因素消融。选择这种组合是为了先建立一个有效的增强方案，再根据结果决定哪些因素值得拆分。固定角度扫描是后续补充的重要环节：它避免随机 Rotation Accuracy 把极端角度的下降平均掉。
+
+\subsection{阶段三：聚合方式是否重要}
+
+E5 在 E4 基础上只把 CLS token 改为 Mean Pooling。两者模型参数量和训练增强基本一致，适合观察聚合方式带来的增量。如果 Grid Accuracy、角度平均或最差位置进一步改善，可以提出“让所有 patch 直接参与表示有助于稳定性”的解释；如果差异很小，则说明主要收益可能已经来自训练分布覆盖。
+
+\subsection{阶段四：加入局部视觉先验}
+
+E6 在 E5 前加入两层卷积 stem。该阶段关注的是小型灰度图像上的局部模式：当主体被平移、旋转或截断时，袖口、鞋底、包带等局部边缘仍可能存在。卷积权值共享可以先提取这些重复出现的局部特征，再由 Transformer 整合全局关系。
+
+E6 是组合方案而非严格的 stem 单变量实验。因此，若 Hybrid 表现最好，合理表述是“卷积 stem、Mean Pooling 与增强的组合在当前预算下最稳定”，而不是断言提升全部由卷积产生。
+
+\subsection{评价证据链}
+
+每个研究问题由不同证据回答：
+
+\begin{itemize}
+  \item Center、Small Shift、Large Shift 和 Robust Drop 描述从原分布到随机平移分布的总体变化；
+  \item 49 点网格热力图揭示高准确率是否只集中在画布中央，并给出最差位置；
+  \item Rotation、Shift+Rotation 和固定角度扇形图描述朝向变化与复合扰动；
+  \item 逐类准确率、混淆矩阵和错误样本解释平均值背后的类别与可见性差异；
+  \item attention rollout 用于观察响应区域是否随前景移动，但不作为模型决策的因果证明。
+\end{itemize}
+
+这种设计将“现象是否存在”“改进是否有效”和“仍然在哪里失败”分开处理，避免只用一项最高 Accuracy 概括整个项目。

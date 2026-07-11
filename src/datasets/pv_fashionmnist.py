@@ -25,7 +25,10 @@ class PVFashionMNIST(Dataset):
     at the canvas boundary.
     """
 
-    MODES = {"center", "random_shift", "small_shift", "large_shift", "grid_shift", "affine"}
+    MODES = {
+        "center", "random_shift", "small_shift", "large_shift", "grid_shift",
+        "rotation", "shift_rotation", "affine",
+    }
 
     def __init__(
         self,
@@ -35,7 +38,9 @@ class PVFashionMNIST(Dataset):
         shift_range: ShiftRange | None = None,
         grid_values: Sequence[int] = (-18, -12, -6, 0, 6, 12, 18),
         fixed_shift: tuple[int, int] | None = None,
-        affine_degrees: float = 10.0,
+        fixed_angle: float | None = None,
+        rotation_degrees: float = 45.0,
+        affine_degrees: float = 45.0,
         affine_scale: tuple[float, float] = (0.9, 1.1),
         random_erasing_prob: float = 0.0,
         seed: int = 42,
@@ -46,12 +51,16 @@ class PVFashionMNIST(Dataset):
             raise ValueError("canvas_size must be at least 28")
         if fixed_shift is not None and mode != "grid_shift":
             raise ValueError("fixed_shift is only valid for grid_shift mode")
+        if fixed_angle is not None and mode != "rotation":
+            raise ValueError("fixed_angle is only valid for rotation mode")
         self.base_dataset = base_dataset
         self.canvas_size = int(canvas_size)
         self.mode = mode
         self.shift_range = shift_range or ShiftRange()
         self.grid_values = tuple(int(v) for v in grid_values)
         self.fixed_shift = fixed_shift
+        self.fixed_angle = None if fixed_angle is None else float(fixed_angle)
+        self.rotation_degrees = float(rotation_degrees)
         self.affine_degrees = float(affine_degrees)
         self.affine_scale = tuple(float(v) for v in affine_scale)
         self.random_erasing_prob = float(random_erasing_prob)
@@ -85,10 +94,17 @@ class PVFashionMNIST(Dataset):
         elif self.mode == "small_shift":
             r = self.shift_range.small
             dx, dy = self._randint(-r, r, g), self._randint(-r, r, g)
-        elif self.mode in {"random_shift", "large_shift", "affine"}:
+        elif self.mode == "rotation":
+            dx = dy = 0
+            angle = self.fixed_angle if self.fixed_angle is not None else self._uniform(
+                -self.rotation_degrees, self.rotation_degrees, g
+            )
+        elif self.mode in {"random_shift", "large_shift", "shift_rotation", "affine"}:
             r = self.shift_range.large
             dx, dy = self._randint(-r, r, g), self._randint(-r, r, g)
-            if self.mode == "affine":
+            if self.mode == "shift_rotation":
+                angle = self._uniform(-self.rotation_degrees, self.rotation_degrees, g)
+            elif self.mode == "affine":
                 angle = self._uniform(-self.affine_degrees, self.affine_degrees, g)
                 scale = self._uniform(self.affine_scale[0], self.affine_scale[1], g)
         else:
@@ -147,4 +163,3 @@ class PVFashionMNIST(Dataset):
         canvas = self._erase(canvas, self._generator(index + 10_000_019))
         meta = {"dx": dx, "dy": dy, "scale": scale, "angle": angle}
         return canvas, int(label), meta
-

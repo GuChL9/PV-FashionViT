@@ -14,7 +14,9 @@ data:
   small_shift: 8
   large_shift: 18
   grid_values: [-18, -12, -6, 0, 6, 12, 18]
-  affine_degrees: 10
+  rotation_degrees: 45
+  angle_values: [-45, -30, -15, 0, 15, 30, 45]
+  affine_degrees: 45
   affine_scale: [0.9, 1.1]
   random_erasing_prob: 0.0
 

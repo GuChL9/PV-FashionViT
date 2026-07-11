@@ -1,26 +1,69 @@
-\section{任务定义与数据集构造}
+\section{PV-FashionMNIST 数据集构造}
 
-\subsection{任务定义}
-原始 FashionMNIST 样本为单通道 $28\times28$ 图像，标签属于十个服饰类别。PV-FashionMNIST 将前景粘贴到全零的 $56\times56$ 画布。以画布中心为基准，$dx>0$ 表示向右移动，$dy>0$ 表示向下移动；模型仍输出同一十类标签。这样，类别本身不变，而位置成为一个可独立操控的变量。
+\subsection{从中心分类到位置可变分类}
 
-\subsection{数据划分与复现}
-官方训练集的 60,000 张图像按固定随机种子 42 划分为 54,000 张训练样本和 6,000 张验证样本；官方 10,000 张测试样本只用于最终评估。训练时的随机位置由 ``seed + epoch + sample index'' 决定，因此同一配置在单进程或多进程加载下均可复现。训练集每个 epoch 更新位置，而验证与测试使用固定协议。
+原始 FashionMNIST 样本是单通道 $28\times28$ 图像。PV-FashionMNIST 不改变类别标签，而是先对前景进行可选旋转，再把它粘贴到 $56\times56$ 的全零画布。以居中位置为原点，$dx>0$ 表示向右移动，$dy>0$ 表示向下移动。模型输入因此统一为 $[1,56,56]$，输出仍是十类 logits。
 
-\subsection{位置与复合扰动}
-本项目使用如下几类位置模式：Center 为 $(0,0)$；Small Shift 在 $[-8,8]$ 内均匀采样；Large Shift 在 $[-18,18]$ 内均匀采样；Grid Shift 使用 $\{-18,-12,-6,0,6,12,18\}^2$ 的 49 个固定坐标。对于 Affine 训练模式，图像先在原始 $28\times28$ 前景上做 $\pm10^\circ$ 旋转和 $[0.9,1.1]$ 缩放，再以随机位置粘贴到画布，并以概率 0.25 施加随机擦除。由于无裁剪粘贴的最大位移只有 14 像素，$|dx|$ 或 $|dy|=18$ 会使前景在画布边缘部分截断；这被保留为 Large Shift 难度的一部分，而不是数据错误。
+这个构造把类别内容与空间位置分开：对同一个原始样本，只需改变 $(dx,dy)$ 或 angle，就能得到一组内容相同而扰动强度不同的测试输入。与直接使用随机增强相比，可记录的元数据使后续按坐标和角度聚合准确率成为可能。每次取样返回
+\[
+  (\text{image},\text{label},\text{meta}),\qquad
+  \text{meta}=\{dx,dy,\text{angle},\text{scale}\}.
+\]
 
-图\ref{fig:data-preview}展示原始样本与五种构造模式。图\ref{fig:position-variation}进一步把同一张图置于九个典型坐标，直观说明本任务既包含纯平移，也在极端位置包含可见区域缩小的情况。
+\subsection{数据划分与随机性控制}
+
+FashionMNIST 官方训练集包含 60,000 张图像，项目按固定随机种子 42 划分为 54,000 张训练样本和 6,000 张验证样本；官方 10,000 张测试图像只用于最终评估。划分索引固定，避免模型之间因验证样本不同而产生额外差异。
+
+训练期随机参数由 seed、epoch 和样本索引共同生成。这样做有两个目的：同一配置重新运行时可以复现；训练样本又不会在所有 epoch 中停留在同一位置和角度。训练循环在每个 epoch 开始时更新数据集状态，而验证集和测试集固定在 epoch 0。随机性不依赖 DataLoader 的 worker 调度，因此切换单进程或多进程加载不会改变某个样本的增强参数。
+
+\subsection{平移协议}
+
+项目把位置变化划分为四种强度：
+
+\begin{itemize}
+  \item \textbf{Center：}固定使用 $(dx,dy)=(0,0)$，对应原始中心分布；
+  \item \textbf{Small Shift：}$dx,dy$ 分别在 $[-8,8]$ 内均匀采样，主体仍大多完整可见；
+  \item \textbf{Large Shift：}$dx,dy$ 分别在 $[-18,18]$ 内均匀采样，包含明显边缘位置；
+  \item \textbf{Grid Shift：}$dx,dy\in\{-18,-12,-6,0,6,12,18\}$，共形成 49 个固定位置，每个位置都评估完整测试集。
+\end{itemize}
+
+28 像素前景在 56 像素画布中无裁剪移动的上限为 14 像素。因此当 $|dx|$ 或 $|dy|>14$ 时，部分前景会越过画布边界。项目没有把越界区域缩回画面，而是按真实粘贴结果裁剪。这使 Large Shift 同时包含位置分布变化和可见信息减少。它提高了极端条件的难度，也意味着后续不能把所有性能下降都简单归因于“缺少平移不变性”。
+
+\subsection{旋转与复合增强}
+
+在平移实验初步建立后，数据协议进一步加入旋转。Rotation 模式把前景保持在中心，在 $[-45^\circ,45^\circ]$ 连续采样角度；Shift+Rotation 则同时在 $[-18,18]$ 内采样平移，并在相同角度范围内旋转。旋转首先作用于原始 $28\times28$ 前景，采用双线性插值和零填充，之后再粘贴到大画布。该顺序避免围绕整张 $56\times56$ 画布旋转而产生与目标无关的大范围位移。
+
+增强模型的训练数据采用 Shift+Rotation，并以 0.25 的概率在画布上执行随机擦除。缩放参数仍作为数据集接口保留，但本轮正式实验不额外混入缩放，以便把主要变化集中在平移和旋转。除了连续随机角度，测试阶段还固定评估
+\[
+  \{-45^\circ,-30^\circ,-15^\circ,0^\circ,15^\circ,30^\circ,45^\circ\},
+\]
+从而得到可解释的角度响应，而不是只保留一次随机平均。
+
+\subsection{数据构造可视化}
+
+图\ref{fig:data-preview}从同一批类别出发，依次展示原始图像、居中画布、随机平移、纯旋转和 Shift+Rotation。它直观呈现了项目真正改变的变量：前景类别保持不变，空间位置和朝向发生变化。
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.98\textwidth]{data_preview.png}
-  \caption{原始 FashionMNIST 与 PV-FashionMNIST 的样本预览。随机平移、网格位置与 Affine 模式共享相同的类别标签，但改变了前景在 $56\times56$ 画布中的位置。}
+  \caption{原始 FashionMNIST 与 PV-FashionMNIST 的五种输入形式。每一列保持同一类别，行间只改变画布、位置和旋转策略。}
   \label{fig:data-preview}
 \end{figure}
 
+图\ref{fig:position-variation}把同一个样本放到九个典型坐标。中心位置保留完整轮廓，四个角落则出现不同方向的截断，这也是后续网格热力图出现边缘退化的重要数据原因。
+
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.63\textwidth]{position_variation_demo.png}
-  \caption{同一测试样本在九个典型 $(dx,dy)$ 位置下的外观。角落位置可出现边缘截断。}
+  \includegraphics[width=0.62\textwidth]{position_variation_demo.png}
+  \caption{同一测试样本在九个典型 $(dx,dy)$ 位置下的外观。极端位置既改变坐标，也减少了可见区域。}
   \label{fig:position-variation}
+\end{figure}
+
+图\ref{fig:angle-variation}固定位置，只改变输入角度。$\pm45^\circ$ 下仍能辨认主体，但轮廓方向和插值后的局部像素已经与中心训练样本明显不同。位置九宫格与角度序列分别隔离了两类扰动，为后续空间和角度分析提供参照。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{angle_variation_demo.png}
+  \caption{同一测试样本在七个固定旋转角度下的输入变化。旋转范围由 $-45^\circ$ 延伸至 $45^\circ$。}
+  \label{fig:angle-variation}
 \end{figure}

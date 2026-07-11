@@ -12,8 +12,11 @@
 \RequirePackage{graphicx}
 \RequirePackage{hyperref}
 \RequirePackage{longtable}
+\RequirePackage{listings}
 \RequirePackage{tabularx}
+\RequirePackage{tikz}
 \RequirePackage{xcolor}
+\usetikzlibrary{arrows.meta,backgrounds,fit,positioning,shapes.geometric}
 
 \geometry{top=2.6cm,bottom=2.6cm,left=2.8cm,right=2.8cm,headheight=16pt}
 \setlength{\parindent}{2em}
@@ -24,6 +27,13 @@
 \definecolor{PVLight}{HTML}{F3F6F9}
 \definecolor{PVBorder}{HTML}{AAB7C4}
 \definecolor{PVMuted}{HTML}{5F6B76}
+\definecolor{PVTeal}{HTML}{2F7F83}
+\definecolor{PVGreen}{HTML}{4E8B66}
+\definecolor{PVGold}{HTML}{C58B32}
+\definecolor{PVBlueLight}{HTML}{E8F0F7}
+\definecolor{PVTealLight}{HTML}{E5F3F2}
+\definecolor{PVGreenLight}{HTML}{EAF3EC}
+\definecolor{PVGoldLight}{HTML}{FAF1DF}
 
 \hypersetup{
   unicode=true,
@@ -58,4 +68,30 @@
   \fcolorbox{PVBorder}{PVLight}{%
     \parbox[c][5.2cm][c]{#1}{\centering\color{PVMuted}\textbf{图片占位}\par\smallskip #2}%
   }%
+}
+
+\lstdefinestyle{pvpython}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{PVBlue}\bfseries,
+  commentstyle=\color{PVGreen}\itshape,
+  stringstyle=\color{PVGold},
+  numbers=left,
+  numberstyle=\tiny\color{PVMuted},
+  numbersep=8pt,
+  frame=single,
+  framerule=0.7pt,
+  rulecolor=\color{PVBorder},
+  backgroundcolor=\color{PVLight},
+  framesep=6pt,
+  xleftmargin=1.8em,
+  framexleftmargin=1.2em,
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=0.8em,
+  belowskip=0.8em,
+  captionpos=b
 }

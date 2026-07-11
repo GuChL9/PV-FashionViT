@@ -22,9 +22,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate attention-rollout figures for a trained ViT")
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--mode", choices=["center", "grid_shift"], default="center")
+    parser.add_argument(
+        "--mode", choices=["center", "grid_shift", "rotation", "shift_rotation"], default="center"
+    )
     parser.add_argument("--dx", type=int, default=18, help="Used with --mode grid_shift")
     parser.add_argument("--dy", type=int, default=18, help="Used with --mode grid_shift")
+    parser.add_argument("--angle", type=float, help="Fixed angle used with --mode rotation")
     parser.add_argument("--indices", default="0,1,2,3", help="Comma-separated test-set indices")
     parser.add_argument("--output")
     return parser.parse_args()
@@ -42,7 +45,11 @@ def main():
     model.eval()
 
     fixed_shift = (args.dx, args.dy) if args.mode == "grid_shift" else None
-    dataset = build_test_dataset(config["data"], config["seed"] + 300, args.mode, fixed_shift)
+    fixed_angle = args.angle if args.mode == "rotation" else None
+    dataset = build_test_dataset(
+        config["data"], config["seed"] + 300, args.mode,
+        fixed_shift=fixed_shift, fixed_angle=fixed_angle,
+    )
     indices = [int(value) for value in args.indices.split(",") if value.strip()]
     samples = [dataset[index] for index in indices]
     images = torch.stack([image for image, _, _ in samples]).to(device)
@@ -59,7 +66,7 @@ def main():
     ):
         resized = F.interpolate(rollout[None, None], size=image.shape[-2:], mode="bilinear", align_corners=False)[0, 0]
         title = f"true: {CLASS_NAMES[label]}\npred: {CLASS_NAMES[prediction]} ({score:.2f})\n"
-        title += f"dx={meta['dx']}, dy={meta['dy']}"
+        title += f"dx={meta['dx']}, dy={meta['dy']}, angle={meta['angle']:.1f}°"
         axes[row, 0].imshow(image.squeeze(), cmap="gray", vmin=0, vmax=1)
         axes[row, 0].set_title(title, fontsize=8)
         axes[row, 1].imshow(resized, cmap="magma", vmin=0, vmax=1)
@@ -71,8 +78,10 @@ def main():
             axis.axis("off")
     figure.suptitle(f"{config['run_name']} — {args.mode}", y=1.01, fontsize=12)
     figure.tight_layout()
+    angle_suffix = f"_{args.angle:+g}deg" if args.mode == "rotation" and args.angle is not None else ""
     output = Path(args.output) if args.output else (
-        Path(config["output"]["save_dir"]) / config["run_name"] / "figures" / f"attention_rollout_{args.mode}.png"
+        Path(config["output"]["save_dir"]) / config["run_name"] / "figures"
+        / f"attention_rollout_{args.mode}{angle_suffix}.png"
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=200, bbox_inches="tight")

@@ -10,6 +10,8 @@ def test_config_inheritance():
     assert config["model"]["patch_size"] == 7
     assert config["model"]["embed_dim"] == 64
     assert config["data"]["num_workers"] == 0
+    assert config["data"]["rotation_degrees"] == 45
+    assert config["data"]["angle_values"] == [-45, -30, -15, 0, 15, 30, 45]
 
 
 def test_gpu_profile_keeps_full_model():

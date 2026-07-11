@@ -105,7 +105,14 @@ def run_evaluation_suite(
     data_cfg, seed = config["data"], config["seed"]
     conditions = {}
     large_shift_dataset = None
-    for name, mode in [("center", "center"), ("small_shift", "small_shift"), ("large_shift", "large_shift")]:
+    evaluation_modes = [
+        ("center", "center"),
+        ("small_shift", "small_shift"),
+        ("large_shift", "large_shift"),
+        ("rotation", "rotation"),
+        ("shift_rotation", "shift_rotation"),
+    ]
+    for name, mode in evaluation_modes:
         dataset = build_test_dataset(data_cfg, seed + 100, mode)
         if name == "large_shift":
             large_shift_dataset = dataset
@@ -118,6 +125,7 @@ def run_evaluation_suite(
         )
 
     grid_rows = []
+    angle_rows = []
     if not skip_grid:
         grid_values = [0] if smoke else data_cfg["grid_values"]
         for dy in grid_values:
@@ -128,14 +136,24 @@ def run_evaluation_suite(
         write_csv(run_dir / "tables" / "grid_accuracy.csv", grid_rows)
         plot_grid_heatmap(grid_rows, grid_values, run_dir / "figures" / "grid_accuracy_heatmap.png")
 
+        angle_values = [0] if smoke else data_cfg["angle_values"]
+        for angle in angle_values:
+            dataset = build_test_dataset(data_cfg, seed + 300, "rotation", fixed_angle=angle)
+            result = evaluate(model, test_loader(dataset, data_cfg, smoke), criterion, device)
+            angle_rows.append({"model": config["run_name"], "angle": angle, "accuracy": result["accuracy"]})
+        write_csv(run_dir / "tables" / "angle_accuracy.csv", angle_rows)
+
     grid_accuracy = sum(row["accuracy"] for row in grid_rows) / len(grid_rows) if grid_rows else float("nan")
     summary = {
         "model": config["run_name"],
         "center_accuracy": conditions["center"]["accuracy"],
         "small_shift_accuracy": conditions["small_shift"]["accuracy"],
         "large_shift_accuracy": conditions["large_shift"]["accuracy"],
+        "rotation_accuracy": conditions["rotation"]["accuracy"],
+        "shift_rotation_accuracy": conditions["shift_rotation"]["accuracy"],
         "grid_accuracy": grid_accuracy,
         "robust_drop": robust_drop(conditions["center"]["accuracy"], conditions["large_shift"]["accuracy"]),
+        "rotation_drop": robust_drop(conditions["center"]["accuracy"], conditions["rotation"]["accuracy"]),
     }
     with (run_dir / "evaluation.json").open("w", encoding="utf-8") as stream:
         json.dump({"summary": summary, "conditions": conditions}, stream, ensure_ascii=False, indent=2)
@@ -167,7 +185,8 @@ def run_evaluation_suite(
         global_tables / "main_results.csv",
         "model",
         summary,
-        ["model", "center_accuracy", "small_shift_accuracy", "large_shift_accuracy", "grid_accuracy", "robust_drop"],
+        ["model", "center_accuracy", "small_shift_accuracy", "large_shift_accuracy",
+         "rotation_accuracy", "shift_rotation_accuracy", "grid_accuracy", "robust_drop", "rotation_drop"],
     )
     ablation_row = {
         "model": config["run_name"],
@@ -203,6 +222,13 @@ def run_evaluation_suite(
             with global_grid.open("r", encoding="utf-8", newline="") as stream:
                 existing = [row for row in csv.DictReader(stream) if row.get("model") != config["run_name"]]
         write_csv(global_grid, existing + grid_rows, ["model", "dx", "dy", "accuracy"])
+    if angle_rows:
+        existing = []
+        global_angles = global_tables / "angle_accuracy.csv"
+        if global_angles.exists():
+            with global_angles.open("r", encoding="utf-8", newline="") as stream:
+                existing = [row for row in csv.DictReader(stream) if row.get("model") != config["run_name"]]
+        write_csv(global_angles, existing + angle_rows, ["model", "angle", "accuracy"])
     return summary
 
 
