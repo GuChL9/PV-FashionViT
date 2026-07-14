@@ -39,3 +39,5 @@ foreach ($run in $runs) {
     }
     python src/main.py --config $run.Config --eval-only --grid --checkpoint $run.Checkpoint
 }
+
+python src/analyze_multiseed_results.py

@@ -1,32 +1,23 @@
 \section{实验结果与量化分析}
 
-本节只使用六个正式 run 的最佳 checkpoint，不包含 smoke test。表\ref{tab:main-results}同时列出平移、旋转和复合扰动结果。由于不同指标回答的问题不同，后续分析不以单列排序代替整体判断。
+本节使用六组模型在五个随机种子下的正式 run，不包含 smoke test。表\ref{tab:main-results}同时列出平移、旋转和复合扰动结果；每个模型的 Mean 行给出五次运行均值，$\pm$ Std 行给出跨种子标准差。由于不同指标回答的问题不同，后续分析不以单列排序代替整体判断。
 
 \subsection{主结果：中心高分不等于位置鲁棒}
 
 \input{tables/main_results}
 
-中心训练的三种基线在 Center 上均达到 $86\%$ 以上，其中 CNN 最高，为 $90.79\%$。一旦测试分布改为 Large Shift，MLP、CNN 和 ViT-AbsPos 分别下降至 $13.93\%$、$13.65\%$ 和 $21.24\%$；对应 Robust Drop 为 73.55、77.14 和 65.43 个百分点。CNN 在中心位置表现最好，却拥有六组中最大的 Robust Drop。这说明局部权值共享可以支持常规分类和小范围模式提取，但不足以抵消固定中心训练、后端固定空间布局以及极端边缘裁剪的共同影响。
+中心训练的三种基线在 Center 上均达到 $86\%$ 以上，其中 CNN 最高，均值为 $90.93\%$。一旦测试分布改为 Large Shift，MLP、CNN 和 ViT-AbsPos 分别下降至 $14.22\%$、$13.80\%$ 和 $20.03\%$；对应 Robust Drop 为 73.41、77.13 和 66.35 个百分点。CNN 在中心位置表现最好，却拥有六组中最大的 Robust Drop。这说明局部权值共享可以支持常规分类和小范围模式提取，但不足以抵消固定中心训练、后端固定空间布局以及极端边缘裁剪的共同影响。
 
-ViT-AbsPos 的中心准确率低于 CNN 4.12 个百分点，但 Large Shift 和 Grid Accuracy 分别高出 7.59 和 8.78 个百分点。全局 token 交互可能扩大了可利用的空间范围，不过 $65.43$ 个百分点的 Robust Drop 仍然很大。换言之，普通 ViT 并没有因为使用自注意力就自然获得位置不变性；中心训练分布和绝对位置编码依然留下了明显偏置。
+ViT-AbsPos 的中心准确率低于 CNN 4.55 个百分点，但 Large Shift 和 Grid Accuracy 分别高出 6.23 和 7.60 个百分点。全局 token 交互可能扩大了可利用的空间范围，不过 $66.35$ 个百分点的 Robust Drop 仍然很大。换言之，普通 ViT 并没有因为使用自注意力就自然获得位置不变性；中心训练分布和绝对位置编码依然留下了明显偏置。
 
-增强模型呈现出不同的取舍。ViT-Aug 的 Center Accuracy 只有 $60.31\%$，明显低于三个中心基线，但 Large Shift、Rotation 和 Shift+Rotation Accuracy 都约为 $64\%$。ViT-MeanPool 的对应指标进一步提高到 $63.64\%$、$67.83\%$、$67.35\%$ 和 $67.93\%$。它们的 Robust Drop 和 Rotation Drop 为小幅负值，并不表示扰动让任务更容易，而是说明模型没有把能力集中在中心位置，几个测试分布之间的差异已经缩小到随机采样和分布细节可以影响符号的程度。
+增强模型呈现出不同的取舍。ViT-Aug 的 Center Accuracy 均值为 $62.81\%$，明显低于三个中心基线，但 Large Shift、Rotation 和 Shift+Rotation Accuracy 都约为 $65\%$。ViT-MeanPool 的对应指标为 $63.51\%$、$66.29\%$、$66.20\%$ 和 $66.83\%$，整体略高于 ViT-Aug；不过二者在 Grid Accuracy 上只相差 1.40 个百分点，且五个 seed 中有一次差值反向。因此，Mean Pooling 在这里更适合被看作轻微正向趋势，而不是主要改进来源。
 
-HybridConv-ViT 在稳定性和绝对准确率之间取得更好的平衡：Center Accuracy 为 $81.25\%$，Large Shift 为 $81.62\%$，Rotation 为 $82.45\%$，Shift+Rotation 为 $81.18\%$。它没有超过 CNN 的中心成绩，但在四类测试条件下保持在约 $81\%$--$82\%$，更符合本项目对“位置可变分类器”的定义。
+HybridConv-ViT 在稳定性和绝对准确率之间取得更好的平衡：Center Accuracy 为 $81.42\%$，Large Shift 为 $81.33\%$，Rotation 为 $81.86\%$，Shift+Rotation 为 $80.90\%$，Grid Accuracy 为 $81.05\%$。它没有超过 CNN 的中心成绩，但在位置、角度和复合扰动协议下都保持在约 $81\%$--$82\%$，更符合本项目对“位置可变分类器”的定义。
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{model_accuracy_comparison.png}
-    \caption*{(a) Center Accuracy}
-  \end{minipage}\hfill
-  \begin{minipage}{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{robust_drop_comparison.png}
-    \caption*{(b) Robust Drop}
-  \end{minipage}
-  \caption{中心准确率与大平移鲁棒性}
+  \includegraphics[width=0.95\textwidth]{multiseed_metric_errorbars.png}
+  \caption{五个随机种子汇总后的多协议 Accuracy。单元格数字为均值百分比，标准差见表\ref{tab:main-results}}
   \label{fig:main-bars}
 \end{figure}
 
@@ -34,33 +25,44 @@ HybridConv-ViT 在稳定性和绝对准确率之间取得更好的平衡：Cente
 
 \input{tables/ablation_results}
 
-表\ref{tab:ablation-results}按增强、pooling 和卷积 stem 整理六组配置。E3 到 E4 的 Grid Accuracy 从 $22.14\%$ 提升至 $62.29\%$，增加 40.15 个百分点；两者 ViT 结构相同，最显著的变化来自训练分布覆盖。这是当前实验中幅度最大的改进，也说明在位置可变任务里，先让训练集包含目标扰动通常比单纯增大模型更直接。
+表\ref{tab:ablation-results}按增强、pooling 和卷积 stem 整理六组配置。
 
-E4 到 E5 只改变主要聚合策略，Grid Accuracy 从 $62.29\%$ 提升到 $66.20\%$，固定七角度平均准确率从 $61.56\%$ 提升到 $65.36\%$。提升幅度不如数据增强阶段大，但在位置网格和角度扫描中方向一致，支持 Mean Pooling 可能让分类表示较少依赖固定 CLS 汇聚路径这一解释。由于只有单个随机种子，这一约 4 个百分点的差距仍需重复实验验证。
+E3 到 E4 的 Grid Accuracy 均值从 $20.68\%$ 提升至 $63.77\%$，增加 43.09 个百分点；两者 ViT 结构相同，最显著的变化来自训练分布覆盖。这是当前实验中幅度最大的改进，也说明在位置可变任务里，先让训练集包含目标扰动通常比单纯增大模型更直接。
 
-E5 到 E6 加入卷积 stem 后，Grid Accuracy 增加 14.79 个百分点，七角度平均增加 15.17 个百分点。Hybrid 的提升同时出现在 Center、Large Shift、Rotation 和 Shift+Rotation，说明它并非只优化某一个特定协议。结合参数规模，291,402 参数的 Hybrid 仍小于 MLP 和 CNN，结果更可能与结构先验和训练分布匹配有关，而不只是参数数量增加。
+E4 到 E5 只改变主要聚合策略，Grid Accuracy 从 $63.77\%$ 提升到 $65.17\%$，增加 1.40 个百分点。五个 seed 中有四个呈现同向提升，但幅度明显小于 E3 到 E4 和 E5 到 E6，因此本报告将其作为轻微正向趋势处理。
 
-\paragraph{证据边界}上述现象支持“训练覆盖、聚合方式和局部先验均可能影响鲁棒性”的解释，但不能构成三个因素各自贡献的因果分解。E4 同时引入平移、旋转和擦除，E6 又是在增强与 Mean Pooling 基础上加入 stem；加之正式实验只有一个随机种子，因此本节用“支持”而非“证明”描述机制判断。
+E5 到 E6 加入卷积 stem 后，Grid Accuracy 增加 15.87 个百分点，七角度平均增加 16.21 个百分点。Hybrid 的提升同时出现在 Center、Large Shift、Rotation 和 Shift+Rotation，说明它并非只优化某一个特定协议。结合参数规模，291,402 参数的 Hybrid 仍小于 MLP 和 CNN，结果更可能与结构先验和训练分布匹配有关，而不只是参数数量增加。
+
+\paragraph{结果小结}总体来看，训练分布覆盖带来最大幅度提升，Mean Pooling 的增量较小，加入卷积 stem 后 Grid Accuracy 和固定角度平均值再次明显提高。E4 同时包含平移、旋转和随机擦除，E6 则是在增强与 Mean Pooling 基础上加入 stem，因此本节只比较这些连续配置下的整体结果。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.78\textwidth]{grid_accuracy_comparison.png}
-  \caption{六组模型的 49 点 Grid Accuracy}
+  \includegraphics[width=0.82\textwidth]{multiseed_grid_accuracy_errorbars.png}
+  \caption{五个随机种子下六组模型的 49 点 Grid Accuracy 均值与标准差}
   \label{fig:grid-comparison}
+\end{figure}
+
+图\ref{fig:grid-deltas}进一步把三个关键比较放回同一 seed 内观察。HybridConv-ViT 相对 ViT-MeanPool 的差值在五个 seed 下均为正，ViT-Aug 相对 ViT-AbsPos 的差值也保持同向；相比之下，ViT-MeanPool 相对 ViT-Aug 在 seed 12345 下出现反向。这说明聚合方式的证据强度低于训练分布覆盖和卷积 stem 两个环节。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{multiseed_pairwise_grid_deltas.png}
+  \caption{同一随机种子下关键模型对的 Grid Accuracy 差值}
+  \label{fig:grid-deltas}
 \end{figure}
 
 \subsection{固定角度扫描的量化结果}
 
-随机 Rotation Accuracy 对 $[-45^\circ,45^\circ]$ 连续采样后的结果取平均，适合概括整体水平，却可能掩盖端点失效。七个固定角度的宏平均分别为：MLP $39.50\%$、CNN $45.50\%$、ViT-AbsPos $41.97\%$、ViT-Aug $61.56\%$、ViT-MeanPool $65.36\%$、HybridConv-ViT $80.53\%$。
+随机 Rotation Accuracy 对 $[-45^\circ,45^\circ]$ 连续采样后的结果取平均，适合概括整体水平，却可能掩盖端点失效。五个 seed 下七个固定角度的宏平均分别为：MLP $39.93\%$、CNN $45.84\%$、ViT-AbsPos $41.75\%$、ViT-Aug $62.75\%$、ViT-MeanPool $64.02\%$、HybridConv-ViT $80.24\%$。
 
-三个中心训练基线都在 $0^\circ$ 达到各自最高值，并随绝对角度增大迅速下降。CNN 在 $+45^\circ$ 仅为 $10.30\%$，ViT-AbsPos 在 $+45^\circ$ 为 $13.01\%$。相比之下，ViT-Aug 七个角度落在 $52.72\%$--$66.11\%$，ViT-MeanPool 落在 $60.13\%$--$69.71\%$，Hybrid 落在 $74.18\%$--$83.98\%$。增强模型不仅平均值更高，角度间波动也明显更小。正负角度并不完全对称，当前数据不足以确定这是类别方向、插值还是训练采样造成的，因此报告只把它作为可重复观察的现象，不作过度机制解释。
+三个中心训练基线都在 $0^\circ$ 附近表现最好，并随绝对角度增大迅速下降。相比之下，ViT-Aug 和 ViT-MeanPool 的固定角度平均值提升到 $60\%$ 以上，HybridConv-ViT 的七角度平均达到 $80.24\%$，最差角度均值也保持在 $73.89\%$。增强模型不仅平均值更高，角度间波动也明显更小。正负角度并不完全对称，当前数据不足以确定这是类别方向、插值还是训练采样造成的，因此报告只把它作为可重复观察的现象，不作过度机制解释。
 
-图\ref{fig:rotation-bars}使用连续随机角度协议汇总 Rotation Accuracy，与后文逐角度扇形图形成互补。柱形图更适合快速比较模型的总体旋转表现，而扇形图用于检查平均值是否掩盖极端角度下降。
+图\ref{fig:rotation-bars}补充展示七角度平均值和最差角度，并与第 7 节的逐角度扇形图形成互补。前者强调跨 seed 的整体稳定性，后者用于检查单个代表性 run 中平均值是否掩盖极端角度下降。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.76\textwidth]{rotation_accuracy_comparison.png}
-  \caption{六组模型在连续随机旋转协议下的 Rotation Accuracy}
+  \includegraphics[width=0.82\textwidth]{multiseed_angle_mean_worst.png}
+  \caption{五个随机种子下固定角度扫描的七角度平均值与最差角度}
   \label{fig:rotation-bars}
 \end{figure}
 

@@ -1,18 +1,18 @@
 \begin{table}[H]
   \centering
-  \caption{模型消融实验结果}
+  \caption{模型消融实验结果（Mean / Std；Std 单位为百分点）}
   \label{tab:ablation-results}
   \resizebox{\textwidth}{!}{%
     \begin{tabular}{lccccc}
       \toprule
       Model & Augmentation & Pooling & Conv Stem & Grid Acc & Robust Drop \\
       \midrule
-      MLP & center & cls & No & 13.62\% & 73.55\% \\
-      CNN & center & cls & No & 13.36\% & 77.14\% \\
-      ViT-AbsPos & center & cls & No & 22.14\% & 65.43\% \\
-      ViT-Aug & shift\_rotation & cls & No & 62.29\% & -3.58\% \\
-      ViT-MeanPool & shift\_rotation & mean & No & 66.20\% & -4.19\% \\
-      HybridConv-ViT & shift\_rotation & mean & Yes & 80.99\% & -0.37\% \\
+      MLP & center & cls & No & 13.58\% / 0.18 & 73.41\% / 0.18 \\
+      CNN & center & cls & No & 13.09\% / 0.48 & 77.13\% / 0.46 \\
+      ViT-AbsPos & center & cls & No & 20.68\% / 1.23 & 66.35\% / 1.33 \\
+      ViT-Aug & shift\_rotation & cls & No & 63.77\% / 2.20 & -1.80\% / 1.25 \\
+      ViT-MeanPool & shift\_rotation & mean & No & 65.17\% / 0.83 & -2.78\% / 0.99 \\
+      HybridConv-ViT & shift\_rotation & mean & Yes & 81.05\% / 0.73 & 0.09\% / 0.62 \\
       \bottomrule
     \end{tabular}%
   }
