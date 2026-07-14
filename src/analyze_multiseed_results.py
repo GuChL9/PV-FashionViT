@@ -36,14 +36,8 @@ METRICS = [
     ("rotation_accuracy", "Rotation"),
     ("shift_rotation_accuracy", "Shift+Rotation"),
 ]
-COLORS = {
-    "MLP": "#244A73",
-    "CNN": "#C58B32",
-    "ViT-AbsPos": "#4E8B66",
-    "ViT-Aug": "#2F7F83",
-    "ViT-MeanPool": "#5F6B76",
-    "HybridConv-ViT": "#8A5A83",
-}
+BLUE = "#244A73"
+ORANGE = "#C58B32"
 
 
 def parse_args():
@@ -133,6 +127,9 @@ def summarize(table: pd.DataFrame) -> pd.DataFrame:
             values = subset[metric].astype(float) * 100
             row[f"{metric}_mean"] = values.mean()
             row[f"{metric}_std"] = values.std(ddof=1)
+            row[f"{metric}_q1"] = values.quantile(0.25)
+            row[f"{metric}_median"] = values.median()
+            row[f"{metric}_q3"] = values.quantile(0.75)
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -201,8 +198,8 @@ def write_multiseed_ablation_table(summary: pd.DataFrame, table: pd.DataFrame, r
     for display_name, _ in MODELS:
         row = summary[summary["model"] == display_name].iloc[0]
         augmentation, pooling, conv_stem = config_rows[display_name]
-        grid = f"{format_percent(row['grid_accuracy_mean'])} / {format_std(row['grid_accuracy_std'])}"
-        drop = f"{format_percent(row['robust_drop_mean'])} / {format_std(row['robust_drop_std'])}"
+        grid = format_percent(row["grid_accuracy_median"])
+        drop = format_percent(row["robust_drop_median"])
         body.append(
             "      "
             + " & ".join([display_name, augmentation, pooling, conv_stem, grid, drop])
@@ -210,7 +207,7 @@ def write_multiseed_ablation_table(summary: pd.DataFrame, table: pd.DataFrame, r
         )
     content = f"""\\begin{{table}}[H]
   \\centering
-  \\caption{{模型消融实验结果（Mean / Std；Std 单位为百分点）}}
+  \\caption{{模型消融实验结果（五个随机种子的中位数）}}
   \\label{{tab:ablation-results}}
   \\resizebox{{\\textwidth}}{{!}}{{%
     \\begin{{tabular}}{{lccccc}}
@@ -257,19 +254,38 @@ def _style_axis(axis):
     axis.spines["right"].set_visible(False)
 
 
+def _iqr_error(summary: pd.DataFrame, metric: str) -> np.ndarray:
+    medians = summary[f"{metric}_median"].to_numpy(dtype=float)
+    q1 = summary[f"{metric}_q1"].to_numpy(dtype=float)
+    q3 = summary[f"{metric}_q3"].to_numpy(dtype=float)
+    return np.vstack([medians - q1, q3 - medians])
+
+
+def _label_x_axis(axis, labels: list[str], fontsize: int = 8) -> None:
+    axis.set_xticks(np.arange(len(labels)), labels)
+    axis.tick_params(axis="x", labelrotation=18, labelsize=fontsize)
+
+
 def plot_grid_errorbars(summary: pd.DataFrame, output: Path) -> None:
     labels = summary["model"].tolist()
-    means = summary["grid_accuracy_mean"].to_numpy()
-    stds = summary["grid_accuracy_std"].to_numpy()
-    y = np.arange(len(labels))
-    figure, axis = plt.subplots(figsize=(9.6, 5.2))
-    axis.barh(y, means, xerr=stds, color=[COLORS[label] for label in labels], alpha=0.9,
-              error_kw={"elinewidth": 1.4, "capsize": 4, "capthick": 1.2})
-    for index, (mean, std) in enumerate(zip(means, stds)):
-        axis.text(mean + std + 1.0, index, f"{mean:.1f}", va="center", fontsize=9)
-    axis.set_yticks(y, labels)
-    axis.set_xlim(0, 90)
-    axis.set_xlabel("Grid Accuracy (%)")
+    medians = summary["grid_accuracy_median"].to_numpy(dtype=float)
+    x = np.arange(len(labels))
+    figure, axis = plt.subplots(figsize=(9.8, 5.4))
+    bars = axis.bar(
+        x,
+        medians,
+        yerr=_iqr_error(summary, "grid_accuracy"),
+        color=BLUE,
+        alpha=0.92,
+        error_kw={"elinewidth": 1.5, "capsize": 4, "capthick": 1.2, "ecolor": "#1F2933"},
+    )
+    for bar, value in zip(bars, medians):
+        axis.text(bar.get_x() + bar.get_width() / 2, value + 1.1, f"{value:.1f}",
+                  ha="center", va="bottom", fontsize=9)
+    _label_x_axis(axis, labels, fontsize=8)
+    axis.set_ylim(0, 90)
+    axis.set_xlabel("Algorithm type")
+    axis.set_ylabel("Grid Accuracy (%)")
     axis.set_title("Grid Accuracy Across Seeds")
     _style_axis(axis)
     figure.tight_layout()
@@ -279,40 +295,48 @@ def plot_grid_errorbars(summary: pd.DataFrame, output: Path) -> None:
 
 def plot_metric_errorbars(summary: pd.DataFrame, output: Path) -> None:
     labels = [display_name for display_name, _ in MODELS]
-    metric_labels = [label for _, label in METRICS]
-    matrix = []
-    for display_name in labels:
-        row = summary[summary["model"] == display_name].iloc[0]
-        matrix.append([row[f"{metric}_mean"] for metric, _ in METRICS])
-    matrix = np.asarray(matrix, dtype=float)
-
-    figure, axis = plt.subplots(figsize=(10.6, 5.4))
-    image = axis.imshow(matrix, vmin=0, vmax=100, cmap="YlGnBu", aspect="auto")
-    axis.set_xticks(np.arange(len(metric_labels)), metric_labels)
-    axis.set_yticks(np.arange(len(labels)), labels)
-    axis.set_title("Accuracy by Evaluation Protocol")
-    axis.tick_params(axis="x", labelrotation=0, labelsize=10)
-    axis.tick_params(axis="y", labelsize=10)
-    axis.set_xticks(np.arange(-0.5, len(metric_labels), 1), minor=True)
-    axis.set_yticks(np.arange(-0.5, len(labels), 1), minor=True)
-    axis.grid(which="minor", color="white", linewidth=1.5)
-    axis.tick_params(which="minor", bottom=False, left=False)
-    for row_index in range(matrix.shape[0]):
-        for column_index in range(matrix.shape[1]):
-            value = matrix[row_index, column_index]
-            color = "white" if value >= 58 else "#1F2933"
+    panels = [
+        ("center_accuracy", "Center Acc", "Accuracy (%)", BLUE),
+        ("large_shift_accuracy", "Large Shift Acc", "Accuracy (%)", BLUE),
+        ("grid_accuracy", "Grid Acc", "Accuracy (%)", BLUE),
+        ("rotation_accuracy", "Rotation Acc", "Accuracy (%)", BLUE),
+        ("shift_rotation_accuracy", "Shift+Rotation Acc", "Accuracy (%)", BLUE),
+        ("robust_drop", "Robust Drop", "Percentage points", ORANGE),
+    ]
+    x = np.arange(len(labels))
+    figure, axes = plt.subplots(2, 3, figsize=(13.2, 7.6), sharex=True)
+    for axis, (metric, title, ylabel, color) in zip(axes.flat, panels):
+        medians = summary[f"{metric}_median"].to_numpy(dtype=float)
+        bars = axis.bar(
+            x,
+            medians,
+            yerr=_iqr_error(summary, metric),
+            color=color,
+            alpha=0.92,
+            error_kw={"elinewidth": 1.3, "capsize": 3, "capthick": 1.1, "ecolor": "#1F2933"},
+        )
+        for bar, value in zip(bars, medians):
+            offset = 1.0 if value >= 0 else -2.6
             axis.text(
-                column_index,
-                row_index,
+                bar.get_x() + bar.get_width() / 2,
+                value + offset,
                 f"{value:.1f}",
                 ha="center",
-                va="center",
-                color=color,
-                fontsize=9,
-                fontweight="bold" if value >= 80 else "normal",
+                va="bottom" if value >= 0 else "top",
+                fontsize=7.5,
             )
-    colorbar = figure.colorbar(image, ax=axis, shrink=0.84, pad=0.02)
-    colorbar.set_label("Accuracy (%)")
+        axis.axhline(0, color="#1F2933", linewidth=0.8)
+        axis.set_title(title, fontsize=11)
+        axis.set_ylabel(ylabel)
+        if metric == "robust_drop":
+            q1 = summary[f"{metric}_q1"].min()
+            q3 = summary[f"{metric}_q3"].max()
+            axis.set_ylim(min(-6, q1 - 4), q3 + 6)
+        else:
+            axis.set_ylim(0, 96)
+        _label_x_axis(axis, labels, fontsize=7)
+        _style_axis(axis)
+    figure.suptitle("Median Results Across Seeds with Interquartile Ranges", fontsize=14, fontweight="bold")
     figure.tight_layout()
     figure.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(figure)
@@ -361,32 +385,38 @@ def plot_pairwise_deltas(table: pd.DataFrame, output: Path) -> None:
 
 def plot_angle_summary(summary: pd.DataFrame, output: Path) -> None:
     labels = summary["model"].tolist()
-    y = np.arange(len(labels))
-    height = 0.36
-    figure, axis = plt.subplots(figsize=(9.8, 5.4))
-    axis.barh(
-        y - height / 2,
-        summary["fixed_angle_mean_mean"],
-        xerr=summary["fixed_angle_mean_std"],
-        height=height,
-        color="#244A73",
+    x = np.arange(len(labels))
+    width = 0.36
+    figure, axis = plt.subplots(figsize=(10.4, 5.6))
+    bars_mean = axis.bar(
+        x - width / 2,
+        summary["fixed_angle_mean_median"],
+        yerr=_iqr_error(summary, "fixed_angle_mean"),
+        width=width,
+        color=BLUE,
         label="Seven-angle mean",
-        error_kw={"elinewidth": 1.3, "capsize": 3},
+        error_kw={"elinewidth": 1.3, "capsize": 3, "ecolor": "#1F2933"},
     )
-    axis.barh(
-        y + height / 2,
-        summary["fixed_angle_worst_mean"],
-        xerr=summary["fixed_angle_worst_std"],
-        height=height,
-        color="#C58B32",
+    bars_worst = axis.bar(
+        x + width / 2,
+        summary["fixed_angle_worst_median"],
+        yerr=_iqr_error(summary, "fixed_angle_worst"),
+        width=width,
+        color=ORANGE,
         label="Worst scanned angle",
-        error_kw={"elinewidth": 1.3, "capsize": 3},
+        error_kw={"elinewidth": 1.3, "capsize": 3, "ecolor": "#1F2933"},
     )
-    axis.set_yticks(y, labels)
-    axis.set_xlim(0, 90)
-    axis.set_xlabel("Accuracy (%)")
+    for bars in (bars_mean, bars_worst):
+        for bar in bars:
+            value = bar.get_height()
+            axis.text(bar.get_x() + bar.get_width() / 2, value + 1.0, f"{value:.1f}",
+                      ha="center", va="bottom", fontsize=8)
+    _label_x_axis(axis, labels, fontsize=8)
+    axis.set_ylim(0, 90)
+    axis.set_xlabel("Algorithm type")
+    axis.set_ylabel("Accuracy (%)")
     axis.set_title("Fixed-angle Robustness")
-    axis.legend(frameon=False, loc="lower right")
+    axis.legend(frameon=False, loc="upper left")
     _style_axis(axis)
     figure.tight_layout()
     figure.savefig(output, dpi=220)
