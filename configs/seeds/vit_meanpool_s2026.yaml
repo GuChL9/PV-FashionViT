@@ -1,0 +1,3 @@
+_base_: ../vit_meanpool.yaml
+seed: 2026
+run_name: vit_meanpool_cpu_s2026

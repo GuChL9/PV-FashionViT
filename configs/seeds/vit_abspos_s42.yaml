@@ -1,0 +1,3 @@
+_base_: ../vit_abspos.yaml
+seed: 42
+run_name: vit_abspos_center_cpu_s42

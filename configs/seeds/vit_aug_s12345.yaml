@@ -1,0 +1,3 @@
+_base_: ../vit_aug.yaml
+seed: 12345
+run_name: vit_aug_cpu_s12345

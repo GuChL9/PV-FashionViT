@@ -1,0 +1,3 @@
+_base_: ../hybrid_vit.yaml
+seed: 12345
+run_name: hybrid_vit_cpu_s12345
