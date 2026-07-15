@@ -1,0 +1,3 @@
+_base_: ../cnn.yaml
+seed: 2026
+run_name: cnn_center_cpu_s2026

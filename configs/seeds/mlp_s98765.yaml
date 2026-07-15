@@ -1,0 +1,3 @@
+_base_: ../mlp.yaml
+seed: 98765
+run_name: mlp_center_cpu_s98765
