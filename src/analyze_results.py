@@ -1,8 +1,9 @@
-"""Build clean, report-ready assets from formal experiment outputs.
+"""Build representative report assets from the seed-42 multi-seed runs.
 
-The script deliberately scans individual run directories instead of trusting
-an append-only CSV.  That makes it safe to run smoke tests in the same project
-and prevents their one-epoch metrics from leaking into report figures.
+The five-seed tables and uncertainty figures are produced separately by
+``analyze_multiseed_results.py``.  This script keeps the detailed plots that
+need one concrete run (training curves, spatial grids, angle scans and class
+results) without requiring a second set of unsuffixed single-seed models.
 """
 
 from __future__ import annotations
@@ -23,13 +24,12 @@ import yaml
 
 
 DISPLAY_NAMES = {
-    "mlp_center_cpu": "MLP",
-    "cnn_center_cpu": "CNN",
-    "vit_abspos_center_cpu": "ViT-AbsPos",
-    "vit_aug_cpu": "ViT-Aug",
-    "vit_meanpool_cpu": "ViT-MeanPool",
-    "hybrid_vit_cpu": "HybridConv-ViT",
-    "vit_sincos_cpu": "ViT-SinCos",
+    "mlp_center_cpu_s42": "MLP",
+    "cnn_center_cpu_s42": "CNN",
+    "vit_abspos_center_cpu_s42": "ViT-AbsPos",
+    "vit_aug_cpu_s42": "ViT-Aug",
+    "vit_meanpool_cpu_s42": "ViT-MeanPool",
+    "hybrid_vit_cpu_s42": "HybridConv-ViT",
 }
 CLASS_NAMES = [
     "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
@@ -49,7 +49,7 @@ def _display_name(run_name: str) -> str:
 
 
 def discover_runs(root: Path):
-    """Read formal runs only; smoke artifacts are intentionally ignored."""
+    """Read exactly the six representative seed-42 formal runs."""
     records = []
     for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         if run_dir.name.endswith("_smoke"):
@@ -67,7 +67,7 @@ def discover_runs(root: Path):
         if not summary:
             continue
         run_name = config.get("run_name", run_dir.name)
-        if run_name.endswith("_smoke"):
+        if run_name not in DISPLAY_NAMES:
             continue
         records.append({"run_dir": run_dir, "config": config, "evaluation": evaluation, "summary": summary,
                         "run_name": run_name, "display_name": _display_name(run_name)})
@@ -314,7 +314,11 @@ def main():
     figures_dir.mkdir(parents=True, exist_ok=True)
     records = discover_runs(root)
     if not records:
-        raise FileNotFoundError("No formal experiment outputs were found")
+        raise FileNotFoundError("No complete seed-42 multi-seed outputs were found")
+    found = {record["run_name"] for record in records}
+    missing = [run_name for run_name in DISPLAY_NAMES if run_name not in found]
+    if missing:
+        raise FileNotFoundError("Missing representative seed-42 runs: " + ", ".join(missing))
 
     main_rows, ablation_rows, per_class = [], [], {name: {"class": name} for name in CLASS_NAMES}
     all_grid_rows, all_angle_rows = [], []

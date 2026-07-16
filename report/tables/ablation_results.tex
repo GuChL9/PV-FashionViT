@@ -5,14 +5,14 @@
   \resizebox{\textwidth}{!}{%
     \begin{tabular}{lccccc}
       \toprule
-      Model & Augmentation & Pooling & Conv Stem & Grid Acc & Robust Drop \\
+      Model & Augmentation & Pooling & Conv Stem & Grid Acc & Robust Drop (pp) \\
       \midrule
-      MLP & center & cls & No & 13.59\% & 73.32\% \\
-      CNN & center & cls & No & 13.16\% & 76.97\% \\
-      ViT-AbsPos & center & cls & No & 20.56\% & 65.91\% \\
-      ViT-Aug & shift\_rotation & cls & No & 64.70\% & -1.59\% \\
-      ViT-MeanPool & shift\_rotation & mean & No & 65.37\% & -2.89\% \\
-      HybridConv-ViT & shift\_rotation & mean & Yes & 80.96\% & -0.01\% \\
+      MLP & center & cls & No & 13.59\% & 73.32 \\
+      CNN & center & cls & No & 13.16\% & 76.97 \\
+      ViT-AbsPos & center & cls & No & 20.56\% & 65.91 \\
+      ViT-Aug & shift\_rotation & cls & No & 64.70\% & -1.59 \\
+      ViT-MeanPool & shift\_rotation & mean & No & 65.37\% & -2.89 \\
+      HybridConv-ViT & shift\_rotation & mean & Yes & 80.96\% & -0.01 \\
       \bottomrule
     \end{tabular}%
   }

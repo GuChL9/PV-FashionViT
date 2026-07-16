@@ -1,6 +1,6 @@
 param(
-    [string]$Config = "configs/vit_abspos.yaml",
-    [string]$Checkpoint = "outputs/vit_abspos_center_cpu/checkpoints/best.pt"
+    [string]$Config = "configs/seeds/vit_abspos_s42.yaml",
+    [string]$Checkpoint = "outputs/vit_abspos_center_cpu_s42/checkpoints/best.pt"
 )
 
 $ErrorActionPreference = "Stop"

@@ -36,10 +36,10 @@ DEFAULT_SHIFTS = ((-18, -18), (18, -18), (-18, 18), (18, 18))
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Compare ViT-AbsPos and Hybrid attention on corrected edge cases")
-    parser.add_argument("--baseline-config", default="configs/vit_abspos.yaml")
-    parser.add_argument("--baseline-checkpoint", default="outputs/vit_abspos_center_cpu/checkpoints/best.pt")
-    parser.add_argument("--hybrid-config", default="configs/hybrid_vit.yaml")
-    parser.add_argument("--hybrid-checkpoint", default="outputs/hybrid_vit_cpu/checkpoints/best.pt")
+    parser.add_argument("--baseline-config", default="configs/seeds/vit_abspos_s42.yaml")
+    parser.add_argument("--baseline-checkpoint", default="outputs/vit_abspos_center_cpu_s42/checkpoints/best.pt")
+    parser.add_argument("--hybrid-config", default="configs/seeds/hybrid_vit_s42.yaml")
+    parser.add_argument("--hybrid-checkpoint", default="outputs/hybrid_vit_cpu_s42/checkpoints/best.pt")
     parser.add_argument("--max-samples", type=int, default=10)
     parser.add_argument(
         "--shifts",

@@ -18,7 +18,7 @@ src/datasets/  FashionMNIST 与 PV-FashionMNIST
 src/models/    MLP、CNN、Tiny ViT、HybridConv-ViT
 src/engine/    训练、评估与指标
 src/utils/     配置、复现、checkpoint、日志和绘图
-scripts/       单模型与一键实验脚本
+scripts/       多随机种子正式流程与单模型调试脚本
 tests/         数据集和模型单元测试
 notebooks/     数据、结果和注意力分析入口
 outputs/       自动生成的表格、图片、日志和权重
@@ -52,28 +52,13 @@ python src/visualize_data.py
 
 默认配置面向普通 CPU：`device=cpu`、batch size 64、DataLoader 单进程、ViT 使用 7x7 patch、64 维 embedding、2 层 encoder，并在至少 5 个 epoch 后启用早停。默认最多训练 12 个 epoch，训练结束后先执行 Center、Small Shift 和 Large Shift 验证，不自动运行耗时较长的 49 点网格。
 
-建议先运行计算量较小的 MLP 和 CNN：
-
-```bash
-bash scripts/run_cpu_baselines.sh
-```
-
-Windows PowerShell：
+正式结果统一采用五个随机种子，不再额外训练一套内容重复的单种子模型。Windows PowerShell 一键运行 6 个模型、5 个 seed，共 30 个 run：
 
 ```powershell
-.\scripts\run_cpu_baselines.ps1
+.\scripts\run_multiseed_experiments.ps1
 ```
 
-也可以逐个运行全部模型：
-
-```bash
-python src/main.py --config configs/mlp.yaml
-python src/main.py --config configs/cnn.yaml
-python src/main.py --config configs/vit_abspos.yaml
-python src/main.py --config configs/vit_aug.yaml
-python src/main.py --config configs/vit_meanpool.yaml
-python src/main.py --config configs/hybrid_vit.yaml
-```
+其中 seed 42 同时作为训练曲线、位置热力图、逐类结果和 attention 图的代表性 run；它已经包含在 30 个 run 中。
 
 位置编码消融的可选扩展（不计入上面的六组主实验）为：
 
@@ -87,23 +72,11 @@ python src/main.py --config configs/vit_sincos.yaml
 python src/main.py --config configs/vit_abspos.yaml --smoke
 ```
 
-Linux/macOS 一键运行全部 CPU 实验：
-
-```bash
-bash scripts/run_all_experiments.sh
-```
-
-Windows PowerShell 一键运行全部 CPU 实验：
-
-```powershell
-.\scripts\run_all_experiments.ps1
-```
-
 ## 测试与网格评估
 
 ```bash
 pytest -q
-bash scripts/eval_grid_shift.sh configs/vit_abspos.yaml outputs/vit_abspos_center_cpu/checkpoints/best.pt
+bash scripts/eval_grid_shift.sh configs/seeds/vit_abspos_s42.yaml outputs/vit_abspos_center_cpu_s42/checkpoints/best.pt
 ```
 
 49 点网格会对完整测试集重复评估 49 次，CPU 上应在模型训练完成后单独运行。
@@ -114,26 +87,26 @@ Windows PowerShell：
 .\scripts\eval_grid_shift.ps1
 ```
 
-六组正式 checkpoint 均已训练完成后，可统一生成 49 点网格结果、报告图与 LaTeX 表格：
+30 个正式 checkpoint 均已训练完成后，统一生成 49 点网格、固定角度结果、报告图与 LaTeX 表格：
 
 ```powershell
-.\scripts\eval_all_grid.ps1
+.\scripts\eval_multiseed_grid.ps1
 ```
 
-该脚本不会重新训练模型。它会依次加载六个 `best.pt`，完成每个模型的 49 点 Grid 评估，并自动运行结果汇总。CPU 上这一步耗时明显长于单次训练；请避免中途终止，否则对应模型不会写出完整的 49 行网格结果。
+该脚本不会重新训练模型。它会依次加载 30 个 `best.pt` 完成网格与角度评估，然后从 seed 42 生成细节图，并汇总五个 seed 的主表与统计图。CPU 上这一步耗时较长；请避免中途终止，否则对应 run 不会写出完整的 49 行网格结果。
 
-`eval_grid_shift.ps1` 只评估一个模型（默认是 ViT-AbsPos），适合调试某个 checkpoint；`eval_all_grid.ps1` 是六组正式实验的批量版本，适合生成最终对比结果。
+`eval_grid_shift.ps1` 只评估一个 checkpoint，保留作局部调试；正式报告只使用 `eval_multiseed_grid.ps1`。
 
 只重新评估已有模型：
 
 ```bash
-python src/main.py --config configs/vit_abspos.yaml --eval-only --checkpoint outputs/vit_abspos_center_cpu/checkpoints/best.pt
+python src/main.py --config configs/seeds/vit_abspos_s42.yaml --eval-only --checkpoint outputs/vit_abspos_center_cpu_s42/checkpoints/best.pt
 ```
 
 强制执行 49 点网格：
 
 ```bash
-python src/main.py --config configs/vit_abspos.yaml --eval-only --grid --checkpoint outputs/vit_abspos_center_cpu/checkpoints/best.pt
+python src/main.py --config configs/seeds/vit_abspos_s42.yaml --eval-only --grid --checkpoint outputs/vit_abspos_center_cpu_s42/checkpoints/best.pt
 ```
 
 ## 日后切换 GPU
@@ -152,18 +125,18 @@ python src/main.py --config configs/gpu/vit_abspos.yaml
 - `outputs/tables/grid_accuracy.csv`
 - `outputs/tables/angle_accuracy.csv`
 
-六组实验全部完成后运行：
+多种子网格评估脚本会自动依次运行：
 
 ```bash
 python src/analyze_results.py
+python src/analyze_multiseed_results.py
 ```
 
-该脚本只读取正式 run，自动忽略名称以 `_smoke` 结尾的链路测试输出，并同步生成
-`outputs/figures/` 与 `report/figures/` 中的报告图片、`report/tables/` 中的正式表格。
+前者只读取六个 seed 42 run，生成训练曲线、位置网格、角度图和逐类图；后者读取全部 30 个 run，生成五种子主表、误差图和模型差值图。两者共享同一批多种子训练结果，不再依赖无 seed 后缀的旧单种子目录。
 
-### 六组网格评估完成后的核心产物
+### 正式多种子评估完成后的核心产物
 
-当六个 run 都有完整的 `tables/grid_accuracy.csv` 后，自动汇总会生成：
+当 30 个 run 都有完整的 `tables/grid_accuracy.csv` 和 `tables/angle_accuracy.csv` 后，自动汇总会生成：
 
 - `outputs/figures/grid_accuracy_panel.png`：六个模型的 7×7 Grid Accuracy heatmap 面板；
 - `outputs/figures/grid_accuracy_comparison.png`：六个模型的 Grid Accuracy 对比；
@@ -179,7 +152,7 @@ python src/analyze_results.py
 
 - 所有绘图脚本固定使用无界面 `Agg` 后端，因此不依赖 Windows 的 Tcl/Tk 图形环境。
 - `--smoke` 只验证训练链路，不会写入正式 `outputs/tables/`；正式图表只读取有 checkpoint 的非 smoke run。
-- `analyze_results.py` 从每个 run 的 `evaluation.json`、配置和网格 CSV 重建汇总，避免旧 CSV 或临时实验污染结果。
+- `analyze_results.py` 固定读取多种子流程中的 seed 42 run，`analyze_multiseed_results.py` 固定读取全部 30 个正式 run，避免旧单种子目录混入报告。
 - Sin-Cos 位置编码配置 `configs/vit_sincos.yaml` 是可选消融，不替代六组主实验。
 - Attention Rollout 是展示模型行为的进阶分析，不是分类性能的核心证据；报告中应将其表述为辅助解释，而非因果证明。
 
@@ -211,10 +184,10 @@ python src/visualize_attention_comparison.py
 如需查看单一模型在任意位置的 rollout，可使用下面的通用命令。输出包含原图、rollout 与叠加图：
 
 ```bash
-python src/visualize_attention.py --config configs/hybrid_vit.yaml \
-  --checkpoint outputs/hybrid_vit_cpu/checkpoints/best.pt --mode center
-python src/visualize_attention.py --config configs/hybrid_vit.yaml \
-  --checkpoint outputs/hybrid_vit_cpu/checkpoints/best.pt --mode grid_shift --dx 18 --dy 18
+python src/visualize_attention.py --config configs/seeds/hybrid_vit_s42.yaml \
+  --checkpoint outputs/hybrid_vit_cpu_s42/checkpoints/best.pt --mode center
+python src/visualize_attention.py --config configs/seeds/hybrid_vit_s42.yaml \
+  --checkpoint outputs/hybrid_vit_cpu_s42/checkpoints/best.pt --mode grid_shift --dx 18 --dy 18
 ```
 
 ## 评价指标

@@ -1,49 +1,28 @@
 \section{总结、局限与后续工作}
 
-\subsection{主要结论}
+\subsection{对研究问题的回答}
 
-本项目把默认居中的 FashionMNIST 分类扩展为可控的位置与角度鲁棒性实验。PV-FashionMNIST 显式记录 $dx$、$dy$ 和 angle，并用随机分布、固定网格与固定角度分别回答总体表现和局部失效问题。表\ref{tab:conclusion-map}将主要发现压缩为“观察—证据—启示”，具体数值仍以第 6 节为准。
+\textbf{第一，位置变化会不会明显影响分类？}会，而且影响远大于中心测试给人的印象。中心训练的 MLP、CNN 和 ViT-AbsPos 在 Center 上都有 $86\%$ 以上准确率，CNN 达到 $90.93\%$；换成 Large Shift 后，三者只剩 $14.22\%$、$13.80\%$ 和 $20.03\%$。这说明原任务中的高准确率很大一部分建立在“衣物总在画布中央”这一稳定条件上。一旦位置变化并伴随边缘裁剪，模型原有的分类能力不能直接迁移过去。
 
-\begin{table}[H]
-  \centering
-  \caption{主要发现、证据来源与工程启示汇总。}
-  \label{tab:conclusion-map}
-  \renewcommand{\arraystretch}{1.18}
-  \begin{tabularx}{\textwidth}{p{0.23\textwidth}p{0.34\textwidth}X}
-    \toprule
-    \textbf{观察} & \textbf{主要证据} & \textbf{工程启示} \\
-    \midrule
-    中心高分不等于位置鲁棒 & Center 与 Grid 指标反向；中心基线热力图形成尖峰 & 标准测试集之外还需扫描目标可能出现的位置 \\
-    训练覆盖是最大变化来源 & E3 到 E4 的 Grid Accuracy 均值提升 43.09 个百分点 & 先让训练分布覆盖目标扰动，再讨论更复杂结构 \\
-    Mean Pooling 呈轻微趋势 & E4 到 E5 的提升幅度较小，且一个 seed 下差值反向 & 聚合策略值得继续验证，但不宜单独下结论 \\
-    Hybrid 组合最稳定 & 五个 seed 下 Grid Accuracy 均为最高，角度平均和复合扰动指标也较高 & 小数据任务中局部卷积先验可与全局 token 建模互补 \\
-    类别困难仍然存在 & Shirt 等相似上装的逐类准确率和混淆仍较差 & 鲁棒性改善不能替代细粒度类别特征与可见性分析 \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
+\textbf{第二，使用绝对位置编码的 Tiny ViT 能否自然适应位移？}不能。ViT-AbsPos 在 Large Shift 和位置网格上比中心训练的 MLP、CNN 略好，但 Grid Accuracy 仍只有约 $21\%$，Robust Drop 达到 66.35 个百分点。自注意力让远距离 patch 可以交换信息，却没有替代合适的训练分布；可学习绝对位置编码也仍会把 token 与固定画布坐标联系起来。
 
-这些证据支持“分布覆盖优先、结构归纳偏置其次”的项目判断，也表明普通自注意力不会自动消除绝对坐标依赖。该结论仅适用于当前小模型、有限训练预算和 PV-FashionMNIST 协议，不能外推为 Transformer 与 CNN 的一般优劣结论。
+\textbf{第三，数据增强、Mean Pooling 和卷积 stem 是否有效？}三者的作用大小不同。加入平移、旋转和随机擦除后，ViT 的 Grid Accuracy 从约 $21\%$ 提升到约 $65\%$，这是最主要的变化；Mean Pooling 又带来约 1 个百分点的小幅改善；加入卷积 stem 后，HybridConv-ViT 的 Center、Large Shift、Rotation、Shift+Rotation 和 Grid Accuracy 都达到约 $81\%$。它没有取得最高的中心准确率，但位置改变、角度改变或二者同时出现时，成绩几乎不再下降。
 
-\subsection{项目价值}
+因此，可以认为 HybridConv-ViT 已经达到本项目对“位置可变 FashionMNIST 分类器”的初步设计要求：它在保留较好分类准确率的同时，明显减弱了模型对中心位置和固定朝向的依赖，并且这一结果在五个随机种子下保持一致。它还不是一个完全解决问题的模型，例如 Shirt 等相似上装仍较难分类，极端位置的前景裁剪也没有消失；但相较于三个中心训练基线，它已经从“中心图像分类器”推进成了能够实际处理位置与角度变化的分类器。
 
-项目的价值不只是一项最高成绩。数据集层面，位置和角度都可复现、可记录、可逐点扫描；模型层面，传统基线和 ViT 变体形成了有解释目的的对照；工程层面，配置、checkpoint、日志、预测和报告资产可以独立重建；分析层面，主结果表、位置网格、角度扇形图、类别混淆和 attention 观察共同组成证据链。整套流程可以迁移到其他“主体位置不固定”的小型视觉任务，而不局限于 FashionMNIST。
-
-\subsection{当前局限}
+\subsection{现有局限}
 
 \begin{enumerate}
-  \item \textbf{随机种子数量仍有限。}本报告已使用五个随机种子汇总主结果，能够减少单次初始化的偶然性；但五次重复仍不足以进行严格显著性检验，尤其是 ViT-Aug 与 ViT-MeanPool 之间约 1--2 个百分点的差异。
-  \item \textbf{消融没有完全解耦。}E4 同时加入平移、旋转和随机擦除；E6 相对基础 ViT 同时包含增强、Mean Pooling 和卷积 stem。报告只能讨论组合变化，不能把全部收益归因于单一模块。
+  \item \textbf{增强没有逐项拆开。}E4 同时加入平移、旋转和随机擦除；E6 又建立在增强与 Mean Pooling 之上。当前报告能确认组合方案有效，但还不知道每个组件单独贡献多少。
   \item \textbf{边缘裁剪构成混杂因素。}$|dx|$ 或 $|dy|>14$ 时前景被裁剪，Large Shift 同时改变位置与可见信息。模型在角落失败不一定意味着缺少平移能力，也可能是类别证据已经丢失。
-  \item \textbf{早停依据偏向中心。}验证集使用 Center 协议，可能优先选择中心准确率较好的 checkpoint，而不是网格或复合扰动最稳定的 checkpoint。
-  \item \textbf{训练预算较小。}CPU 配置采用 7 像素 patch、64 维 embedding、2 层 Encoder 和最多 12 个 epoch，适合课程工程闭环，但不能代表更充分训练或更大 ViT 的上限。
+  \item \textbf{早停依据偏向中心。}验证集使用 Center 协议，可能优先选择中心准确率较好的检查点，而不是网格或复合扰动最稳定的检查点。
+  \item \textbf{训练预算有限。}CPU 配置采用 7 像素 patch、64 维 embedding、2 层 Encoder 和最多 12 个 epoch，足够完成课程项目的比较，但没有探索更大 ViT 或更长训练的上限。
   \item \textbf{Attention 解释有限。}rollout 样本按预测差异筛选，不能代表完整测试分布；注意力高响应也不等同于因果特征重要性。
   \item \textbf{效率证据不完整。}当前只可靠记录参数量和单次训练的 epoch time，尚未在统一硬件与 batch size 下重复测量推理延迟、峰值内存和吞吐量，也未统计 FLOPs。因此报告可以比较模型规模，但不宣称 Hybrid 已取得最佳计算效率。
 \end{enumerate}
 
 \subsection{后续可开展实验}
 
-后续工作应优先补充能够澄清当前结论的实验，而不是继续堆叠模型。第一步是扩大随机种子数量，或使用更严格的配对检验，尤其复核 Mean Pooling 的轻微收益。第二步拆分增强链：Center、只平移、平移+旋转、平移+旋转+擦除依次比较，明确角度和擦除各自的作用。第三步在相同增强和 Mean Pooling 下增加“无卷积 stem”的严格对照，同时补充 Learnable、Sin-Cos 和 No-Pos 三种位置编码。
+如果继续推进，优先补充几个能把现有现象讲得更清楚的实验：依次比较 Center、只平移、平移+旋转、平移+旋转+擦除；在相同增强下单独切换 CLS 与 Mean Pooling；再比较有无卷积 stem。这样可以更直接地判断每一步为何有效。位置编码也可以补充 Learnable、Sin-Cos 和 No-Pos 三种设置。
 
-对于数据协议，可以增加“无裁剪平移”测试，只在 $[-14,14]$ 内移动前景，再与现有 Large Shift 对照，从而区分纯位置变化和信息缺失。验证阶段也可同时监控 Center Accuracy 与扰动验证准确率，或者使用二者加权指标选择 checkpoint。最后，再考虑 GPU 配置、更小 patch 和更长训练，而不是在当前证据尚未拆清之前继续增加复杂模块。
-
-总体而言，本项目得到的最重要认识是：分类器在标准测试集上的高准确率，并不自动意味着它适应目标位置和朝向变化。只有把扰动显式构造成数据、把鲁棒性拆成可测指标，并用对照实验和可视化追踪失效区域，才能较完整地评价一个位置可变图像分类系统。
+对于数据协议，可以增加“无裁剪平移”测试，只在 $[-14,14]$ 内移动前景，再与现有 Large Shift 对照，从而区分纯位置变化和信息缺失。验证阶段也可同时监控 Center Accuracy 与扰动验证准确率，或者使用二者加权指标选择检查点。完成这些对照后，再考虑 GPU 配置、更小 patch 和更长训练。

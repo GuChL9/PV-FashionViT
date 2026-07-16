@@ -7,33 +7,54 @@
 % -----------------------------------------------------------------------------
 \newcommand{\ReportTitle}{PV-FashionViT：基于 Transformer 的位置可变 FashionMNIST 图像分类}
 \newcommand{\CourseName}{人工智能工程实践}
-\newcommand{\SubmissionDate}{2026.7}
- 
+\newcommand{\SubmissionDate}{2026 年 7 月}
+\newcommand{\MemberOneName}{李怿凡}
+\newcommand{\MemberOneID}{3240103379}
+\newcommand{\MemberTwoName}{李建树}
+\newcommand{\MemberTwoID}{\fieldplaceholder{学号}}
+\newcommand{\MemberThreeName}{龙官震}
+\newcommand{\MemberThreeID}{3250105720}
+\newcommand{\MemberFourName}{朱云麟}
+\newcommand{\MemberFourID}{3250102363}
+
 \begin{document}
 
 \begin{titlepage}
-  \centering
-  \vspace*{2.2cm}
-  {\zihao{-1}\bfseries\color{PVBlue}\ReportTitle\par}
-  \vspace{1.2cm}
-  {\zihao{3}\CourseName\par}
-  \vfill
+  \thispagestyle{empty}
+  \vspace*{0.8cm}
+  \noindent\hspace{2mm}%
+  \colorbox{PVBlue}{\parbox{0.34\textwidth}{\centering\color{white}\small\bfseries COURSE PROJECT REPORT}}
 
-  \renewcommand{\arraystretch}{1.6}
-  \begin{tabularx}{0.88\textwidth}{>{\centering\arraybackslash}p{2.6cm} X X X}
-    \toprule
-    姓名 & 学号 & GitHub 用户名 & 主要贡献 \\
-    \midrule
-    \fieldplaceholder{成员 1} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
-    \fieldplaceholder{成员 2} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
-    \fieldplaceholder{成员 3} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
-    \fieldplaceholder{成员 4} & \fieldplaceholder{学号} & \fieldplaceholder{用户名} & \fieldplaceholder{贡献} \\
-    \bottomrule
-  \end{tabularx}
+  \vspace{1.5cm}
+  \begin{center}
+    \begin{minipage}{0.86\textwidth}
+      \centering
+      {\zihao{1}\bfseries\color{PVBlue}\ReportTitle\par}
+    \end{minipage}
+    \vspace{0.8cm}
+    {\color{PVBorder}\rule{0.68\textwidth}{0.8pt}\par}
+    \vspace{0.65cm}
+    {\zihao{3}\bfseries\color{PVBlue}\CourseName\par}
 
-  \vfill
-  {\zihao{4}\SubmissionDate\par}
-  \vspace*{1.2cm}
+    \vspace{2.0cm}
+    {\zihao{4}\bfseries\color{PVBlue}小组成员\par}
+    \vspace{0.45cm}
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabularx}{0.76\textwidth}{>{\color{PVMuted}}c X X}
+      \toprule
+      序号 & 姓名 & 学号 \\
+      \midrule
+      1 & \MemberOneName & \MemberOneID \\
+      2 & \MemberTwoName & \MemberTwoID \\
+      3 & \MemberThreeName & \MemberThreeID \\
+      4 & \MemberFourName & \MemberFourID \\
+      \bottomrule
+    \end{tabularx}
+
+    \vfill
+    {\zihao{4}\color{black}\SubmissionDate\par}
+  \end{center}
+  \vspace*{0.4cm}
 \end{titlepage}
 
 \pagenumbering{Roman}
