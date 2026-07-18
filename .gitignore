@@ -1,8 +1,24 @@
+# Python bytecode and tool caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# Virtual environments and package builds
 .venv/
-.codex_deps/
+.env
+.env.*
+!.env.example
+build/
+dist/
+*.egg-info/
+
+# Project-generated data and experiment artifacts
 tmp/
 data/*
 !data/.gitkeep
@@ -11,17 +27,32 @@ outputs/checkpoints/*
 !outputs/checkpoints/.gitkeep
 outputs/logs/*
 !outputs/logs/.gitkeep
+
+# Editors, operating systems, and temporary files
 .idea/
 .vscode/
 .DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# LaTeX auxiliary files
 report/*.aux
 report/*.bbl
 report/*.bcf
 report/*.blg
 report/*.fdb_latexmk
 report/*.fls
+report/*.lof
 report/*.log
+report/*.lot
+report/*.nav
 report/*.out
 report/*.run.xml
+report/*.snm
 report/*.synctex.gz
 report/*.toc
+report/*.vrb
+report/*.xdv
