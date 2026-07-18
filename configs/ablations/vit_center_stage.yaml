@@ -1,0 +1,4 @@
+_base_: ../vit_abspos.yaml
+run_name: vit_center_stage_cpu
+output:
+  publish_global: false

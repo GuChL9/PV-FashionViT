@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import statistics
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,14 +18,25 @@ class Stage:
 
 
 STAGES = [
-    Stage("center", "Center", "Center", "vit_abspos_center_cpu", "vit_abspos_center_cpu"),
+    Stage(
+        "center",
+        "Center",
+        "Center",
+        "vit_center_stage_cpu",
+        "vit_abspos_center_cpu",
+    ),
     Stage("shift", "Shift only", "Shift", "vit_shift_cpu"),
-    Stage("shift_rotation", "Shift + Rotation", "Shift+Rot", "vit_shift_rotation_cpu"),
+    Stage(
+        "shift_rotation",
+        "Shift + Rotation",
+        "Shift+Rot",
+        "vit_shift_rotation_cpu",
+    ),
     Stage(
         "shift_rotation_erasing",
         "Shift + Rotation + Erasing",
         "+Erase",
-        "vit_aug_cpu",
+        "vit_shift_rotation_erasing_cpu",
         "vit_aug_cpu",
     ),
 ]
@@ -35,6 +47,7 @@ METRICS = [
     ("rotation_accuracy", "Rotation"),
     ("shift_rotation_accuracy", "Shift+Rotation"),
 ]
+SUMMARY_METRICS = [metric for metric, _ in METRICS] + ["robust_drop"]
 
 
 def load_global_rows(path: Path) -> dict[str, dict[str, str]]:
@@ -44,20 +57,29 @@ def load_global_rows(path: Path) -> dict[str, dict[str, str]]:
         return {row["model"]: row for row in csv.DictReader(stream)}
 
 
-def load_stage_summary(stage: Stage, seed: int, outputs_dir: Path, global_rows: dict) -> dict:
+def load_stage_summary(
+    stage: Stage,
+    seed: int,
+    outputs_dir: Path,
+    global_rows: dict[str, dict[str, str]],
+) -> dict[str, object]:
     run_name = f"{stage.run_base}_s{seed}"
     evaluation = outputs_dir / run_name / "evaluation.json"
     if evaluation.exists():
         with evaluation.open("r", encoding="utf-8") as stream:
             return json.load(stream)["summary"]
-    if stage.global_fallback and stage.global_fallback in global_rows:
+    if seed == 42 and stage.global_fallback and stage.global_fallback in global_rows:
         return global_rows[stage.global_fallback]
     raise FileNotFoundError(
-        f"Missing {evaluation}. Train the ablation stage first; no global fallback is available."
+        f"Missing {evaluation}. Train the ablation stage for seed {seed} first."
     )
 
 
-def collect_rows(seed: int, outputs_dir: Path, global_table: Path) -> list[dict[str, object]]:
+def collect_rows(
+    seed: int,
+    outputs_dir: Path,
+    global_table: Path,
+) -> list[dict[str, object]]:
     global_rows = load_global_rows(global_table)
     rows = []
     for stage in STAGES:
@@ -68,34 +90,76 @@ def collect_rows(seed: int, outputs_dir: Path, global_table: Path) -> list[dict[
             "short_label": stage.short_label,
             "seed": seed,
         }
-        for metric, _ in METRICS:
+        for metric in SUMMARY_METRICS:
             row[metric] = float(summary[metric])
-        row["robust_drop"] = float(summary["robust_drop"])
         rows.append(row)
     return rows
 
 
-def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = [
-        "stage",
-        "label",
-        "seed",
-        *(metric for metric, _ in METRICS),
-        "robust_drop",
+def collect_multiseed_rows(
+    seeds: list[int],
+    outputs_dir: Path,
+    global_table: Path,
+) -> list[dict[str, object]]:
+    return [
+        row
+        for seed in seeds
+        for row in collect_rows(seed, outputs_dir, global_table)
     ]
+
+
+def summarize_rows(
+    rows: list[dict[str, object]], seeds: list[int]
+) -> list[dict[str, object]]:
+    summaries = []
+    for stage in STAGES:
+        subset = [row for row in rows if row["stage"] == stage.key]
+        observed = sorted(int(row["seed"]) for row in subset)
+        if observed != sorted(seeds):
+            raise ValueError(
+                f"Stage {stage.key} has seeds {observed}; expected {sorted(seeds)}"
+            )
+        summary: dict[str, object] = {
+            "stage": stage.key,
+            "label": stage.label,
+            "short_label": stage.short_label,
+            "seed_count": len(subset),
+        }
+        for metric in SUMMARY_METRICS:
+            values = [float(row[metric]) for row in subset]
+            summary[f"{metric}_mean"] = statistics.fmean(values)
+            summary[f"{metric}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
+        summaries.append(summary)
+    return summaries
+
+
+def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        raise ValueError("Cannot write an empty augmentation table")
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
 
 
-def write_latex(path: Path, rows: list[dict[str, object]], seed: int) -> None:
+def _format_mean_std(row: dict[str, object], metric: str) -> str:
+    mean = 100 * float(row[f"{metric}_mean"])
+    std = 100 * float(row[f"{metric}_std"])
+    return f"{mean:.2f} $\\pm$ {std:.2f}"
+
+
+def write_latex(
+    path: Path,
+    rows: list[dict[str, object]],
+    seeds: list[int],
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    seed_text = ", ".join(str(seed) for seed in seeds)
     lines = [
         r"\begin{table}[H]",
         r"  \centering",
-        rf"  \caption{{随机种子 {seed} 的数据增强逐项消融。四行使用相同 Tiny ViT、优化器和训练预算，只逐步扩大训练分布。}}",
+        rf"  \caption{{数据增强逐项消融（随机种子 {seed_text}）。单元格为均值 $\pm$ 样本标准差，单位为百分比或百分点。}}",
         r"  \label{tab:augmentation-stages}",
         r"  \renewcommand{\arraystretch}{1.12}",
         r"  \resizebox{\textwidth}{!}{%",
@@ -105,13 +169,10 @@ def write_latex(path: Path, rows: list[dict[str, object]], seed: int) -> None:
         r"      \midrule",
     ]
     for row in rows:
-        values = [100 * float(row[metric]) for metric, _ in METRICS]
-        drop = 100 * float(row["robust_drop"])
         label = str(row["label"]).replace("+", r"$+$")
-        lines.append(
-            f"      {label} & {values[0]:.2f}\\% & {values[1]:.2f}\\% & "
-            f"{values[2]:.2f}\\% & {values[3]:.2f}\\% & {drop:.2f} \\\\"
-        )
+        values = [_format_mean_std(row, metric) for metric, _ in METRICS]
+        drop = _format_mean_std(row, "robust_drop")
+        lines.append(f"      {label} & " + " & ".join([*values, drop]) + r" \\")
     lines.extend(
         [
             r"      \bottomrule",
@@ -123,7 +184,7 @@ def write_latex(path: Path, rows: list[dict[str, object]], seed: int) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def plot(path: Path, rows: list[dict[str, object]], seed: int) -> None:
+def plot(path: Path, rows: list[dict[str, object]], seeds: list[int]) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -134,18 +195,29 @@ def plot(path: Path, rows: list[dict[str, object]], seed: int) -> None:
     offsets = [-0.27, -0.09, 0.09, 0.27]
     width = 0.18
     colors = ["#244A73", "#2F7F83", "#C58B32", "#4E8B66"]
-    fig, ax = plt.subplots(figsize=(10.5, 5.1))
+    fig, ax = plt.subplots(figsize=(10.5, 5.2))
     for (metric, label), offset, color in zip(METRICS, offsets, colors):
-        values = [100 * float(row[metric]) for row in rows]
-        bars = ax.bar([value + offset for value in x], values, width, label=label, color=color)
-        ax.bar_label(bars, fmt="%.1f", padding=2, fontsize=7)
+        means = [100 * float(row[f"{metric}_mean"]) for row in rows]
+        stds = [100 * float(row[f"{metric}_std"]) for row in rows]
+        positions = [value + offset for value in x]
+        bars = ax.bar(
+            positions,
+            means,
+            width,
+            yerr=stds,
+            capsize=2.5,
+            label=label,
+            color=color,
+            error_kw={"elinewidth": 0.9, "capthick": 0.9},
+        )
+        ax.bar_label(bars, fmt="%.1f", padding=4, fontsize=7)
     ax.set_ylabel("Accuracy (%)")
     ax.set_xticks(x, [str(row["short_label"]) for row in rows])
     ax.set_ylim(0, 100)
     ax.grid(axis="y", linestyle="--", alpha=0.28)
     ax.legend(loc="upper left", ncols=2, frameon=False)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_title(f"Augmentation-stage ablation (seed {seed})")
+    ax.set_title(f"Augmentation-stage ablation ({len(seeds)} seeds, mean +/- SD)")
     fig.tight_layout()
     fig.savefig(path, dpi=220, bbox_inches="tight")
     plt.close(fig)
@@ -153,13 +225,21 @@ def plot(path: Path, rows: list[dict[str, object]], seed: int) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Summarize the staged augmentation ablation")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seeds", nargs="+", type=int, default=[42, 2026, 3407])
+    parser.add_argument("--seed", type=int, help="Legacy single-seed shortcut")
     parser.add_argument("--outputs-dir", type=Path, default=Path("outputs"))
     parser.add_argument(
         "--global-table", type=Path, default=Path("outputs/tables/main_results.csv")
     )
     parser.add_argument(
-        "--csv-output", type=Path, default=Path("outputs/tables/augmentation_ablation_s42.csv")
+        "--raw-output",
+        type=Path,
+        default=Path("outputs/tables/augmentation_ablation_3seed_raw.csv"),
+    )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=Path("outputs/tables/augmentation_ablation_3seed_summary.csv"),
     )
     parser.add_argument(
         "--table-output", type=Path, default=Path("report/tables/augmentation_stages.tex")
@@ -174,11 +254,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    rows = collect_rows(args.seed, args.outputs_dir, args.global_table)
-    write_csv(args.csv_output, rows)
-    write_latex(args.table_output, rows, args.seed)
-    plot(args.figure_output, rows, args.seed)
-    print(f"Wrote {len(rows)} augmentation stages for seed {args.seed}")
+    seeds = [args.seed] if args.seed is not None else list(dict.fromkeys(args.seeds))
+    raw = collect_multiseed_rows(seeds, args.outputs_dir, args.global_table)
+    summary = summarize_rows(raw, seeds)
+    write_csv(args.raw_output, raw)
+    write_csv(args.summary_output, summary)
+    write_latex(args.table_output, summary, seeds)
+    plot(args.figure_output, summary, seeds)
+    print(f"Wrote {len(STAGES)} augmentation stages across {len(seeds)} seed(s)")
 
 
 if __name__ == "__main__":

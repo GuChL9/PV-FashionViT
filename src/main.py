@@ -29,6 +29,8 @@ from utils.visualization import (
 def parse_args():
     parser = argparse.ArgumentParser(description="Train and evaluate PV-FashionViT models")
     parser.add_argument("--config", required=True)
+    parser.add_argument("--seed", type=int, help="Override the random seed from the config")
+    parser.add_argument("--run-name", help="Override run_name from the config")
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument("--checkpoint")
     parser.add_argument("--skip-grid", action="store_true", help="Skip the 49-position evaluation")
@@ -235,6 +237,10 @@ def run_evaluation_suite(
 def main():
     args = parse_args()
     config = load_config(args.config)
+    if args.seed is not None:
+        config["seed"] = args.seed
+    if args.run_name:
+        config["run_name"] = args.run_name
     if args.smoke:
         config["train"]["epochs"] = 1
         config["run_name"] += "_smoke"

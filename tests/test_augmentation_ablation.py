@@ -1,6 +1,8 @@
 import json
 
-from src.analyze_augmentation_ablation import STAGES, collect_rows
+import pytest
+
+from src.analyze_augmentation_ablation import STAGES, collect_rows, summarize_rows
 
 
 def _summary(center, large, rotation, combined):
@@ -41,3 +43,28 @@ def test_collect_rows_uses_run_evaluations_and_global_endpoints(tmp_path):
     assert rows[1]["large_shift_accuracy"] == 0.68
     assert rows[2]["rotation_accuracy"] == 0.64
     assert rows[3]["robust_drop"] == -0.02
+
+
+def test_summarize_rows_reports_sample_standard_deviation():
+    rows = []
+    for seed, offset in [(42, 0.0), (2026, 0.1), (3407, 0.2)]:
+        for stage in STAGES:
+            rows.append(
+                {
+                    "stage": stage.key,
+                    "label": stage.label,
+                    "short_label": stage.short_label,
+                    "seed": seed,
+                    "center_accuracy": 0.5 + offset,
+                    "large_shift_accuracy": 0.4 + offset,
+                    "rotation_accuracy": 0.3 + offset,
+                    "shift_rotation_accuracy": 0.2 + offset,
+                    "robust_drop": 0.1,
+                }
+            )
+
+    summary = summarize_rows(rows, [42, 2026, 3407])
+
+    assert len(summary) == len(STAGES)
+    assert summary[0]["center_accuracy_mean"] == pytest.approx(0.6)
+    assert summary[0]["center_accuracy_std"] == pytest.approx(0.1)

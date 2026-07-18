@@ -60,25 +60,33 @@ python src/visualize_data.py
 
 其中 seed 42 同时作为训练曲线、位置热力图、逐类结果和 attention 图的代表性 run；它已经包含在 30 个 run 中。
 
-位置编码消融的可选扩展（不计入上面的六组主实验）为：
-
-```bash
-python src/main.py --config configs/vit_sincos.yaml
-```
-
-数据增强还提供一条逐项消融支线。它保持 Tiny ViT、优化器与训练预算不变，只补训“仅平移”和“平移+旋转”两个中间阶段，并与已有的 Center、完整增强端点组成四阶段对照：
+数据增强还提供一条逐项消融支线。它保持 Tiny ViT、优化器与训练预算不变，依次比较 Center、仅平移、平移+旋转、平移+旋转+Random Erasing。默认使用 42、2026、3407 三个随机种子，已存在完整 `evaluation.json` 的运行会自动跳过：
 
 ```powershell
 .\scripts\run_augmentation_ablation.ps1
 ```
 
-默认只运行 seed 42，作为低成本的探索性证据；如需把中间阶段扩展到三个随机种子，可运行：
+如需指定随机种子或强制重跑：
 
 ```powershell
-.\scripts\run_augmentation_ablation.ps1 -Seeds 42,2026,3407
+.\scripts\run_augmentation_ablation.ps1 -Seeds 42,2026,3407 -Force
 ```
 
-脚本不会改写六组主实验的全局汇总表。seed 42 完成后会生成 `outputs/tables/augmentation_ablation_s42.csv`、`report/tables/augmentation_stages.tex` 和 `report/figures/augmentation_stages.png`。
+脚本不会改写六组主实验的全局汇总表。完成后会生成三种子原始表、均值/标准差汇总、`report/tables/augmentation_stages.tex` 和 `report/figures/augmentation_stages.png`。
+
+位置编码支线固定 Center 训练、CLS pooling 和同一 Tiny ViT，只比较 Learnable Absolute、固定二维 Sin-Cos 与 No Positional Encoding：
+
+```powershell
+.\scripts\run_position_encoding_ablation.ps1
+```
+
+等半径裁剪对照复用 seed 42 的 Center 与完整增强 checkpoint。在完全相同的位移半径内，分别汇总几何上保证完整和可能发生裁剪的坐标：
+
+```powershell
+.\scripts\run_matched_clipping.ps1
+```
+
+该分析使用 7 个精确匹配半径和 104 个坐标，输出 `report/tables/matched_clipping.tex` 与 `report/figures/matched_clipping.png`。它比原 49 点内外圈更好地控制离中心距离，但坐标方向仍不完全相同，因此仍表述为距离匹配关联，而非严格因果效应。
 
 统一 CPU 前向基准可独立运行：
 

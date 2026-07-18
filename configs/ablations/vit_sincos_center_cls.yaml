@@ -1,0 +1,4 @@
+_base_: vit_center_stage.yaml
+run_name: vit_sincos_center_cls_cpu
+model:
+  positional_encoding: sincos
