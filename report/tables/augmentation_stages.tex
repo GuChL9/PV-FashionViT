@@ -1,0 +1,18 @@
+\begin{table}[H]
+  \centering
+  \caption{随机种子 42 的数据增强逐项消融。四行使用相同 Tiny ViT、优化器和训练预算，只逐步扩大训练分布。}
+  \label{tab:augmentation-stages}
+  \renewcommand{\arraystretch}{1.12}
+  \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccc}
+      \toprule
+      Training distribution & Center Acc & Large Shift Acc & Rotation Acc & Shift+Rotation Acc & Robust Drop (pp) \\
+      \midrule
+      Center & 86.67\% & 21.24\% & 46.16\% & 18.55\% & 65.43 \\
+      Shift only & 73.16\% & 74.03\% & 41.68\% & 42.75\% & -0.87 \\
+      Shift $+$ Rotation & 63.61\% & 65.95\% & 66.76\% & 67.51\% & -2.34 \\
+      Shift $+$ Rotation $+$ Erasing & 60.31\% & 63.89\% & 63.66\% & 63.64\% & -3.58 \\
+      \bottomrule
+    \end{tabular}%
+  }
+\end{table}

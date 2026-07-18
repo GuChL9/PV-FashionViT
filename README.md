@@ -66,6 +66,28 @@ python src/visualize_data.py
 python src/main.py --config configs/vit_sincos.yaml
 ```
 
+数据增强还提供一条逐项消融支线。它保持 Tiny ViT、优化器与训练预算不变，只补训“仅平移”和“平移+旋转”两个中间阶段，并与已有的 Center、完整增强端点组成四阶段对照：
+
+```powershell
+.\scripts\run_augmentation_ablation.ps1
+```
+
+默认只运行 seed 42，作为低成本的探索性证据；如需把中间阶段扩展到三个随机种子，可运行：
+
+```powershell
+.\scripts\run_augmentation_ablation.ps1 -Seeds 42,2026,3407
+```
+
+脚本不会改写六组主实验的全局汇总表。seed 42 完成后会生成 `outputs/tables/augmentation_ablation_s42.csv`、`report/tables/augmentation_stages.tex` 和 `report/figures/augmentation_stages.png`。
+
+统一 CPU 前向基准可独立运行：
+
+```bash
+python src/benchmark_cpu.py
+```
+
+它在 8 个 PyTorch 线程、batch size 64 下，对五种不同推理结构分别预热 5 次并测量 30 个 batch，报告参数量、平均 batch 延迟和吞吐量。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS) 结构，因此只计一次；数据增强不会增加推理结构。该结果只测模型前向，不包含数据加载，也不等同于完整训练耗时。
+
 快速验证整个程序链路：
 
 ```bash

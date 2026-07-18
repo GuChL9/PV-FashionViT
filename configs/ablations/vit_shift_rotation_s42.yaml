@@ -1,0 +1,3 @@
+_base_: vit_shift_rotation.yaml
+seed: 42
+run_name: vit_shift_rotation_cpu_s42

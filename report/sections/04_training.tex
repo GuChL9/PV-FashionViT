@@ -121,6 +121,12 @@ optimizer.step()                   # AdamW parameter update
 
 验证集采用 Center 协议，优点是简单、稳定，也和原始 FashionMNIST 分类任务直接对应；代价是增强模型仍按中心准确率选择检查点，而不是按 Grid 或 Shift+Rotation 表现选优。本项目保留这一统一标准以便完成横向比较，并把更全面的鲁棒性验证留作后续改进。
 
+\subsection{统一 CPU 前向基准}
+
+除训练日志中的单轮耗时外，项目还用 \texttt{src/benchmark\_cpu.py} 对五种不同推理结构执行统一前向基准。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS)，数据增强只改变训练输入，因此不重复计时。所有模型均切换到 \texttt{eval()}，在 \texttt{inference\_mode()} 下接收同一形状的随机输入；固定 8 个 PyTorch 线程和 batch size 64，先预热 5 个 batch，再重复测量 30 个 batch。表\ref{tab:cpu-benchmark}中的延迟不含数据读取、图像变换、反向传播和优化器更新，因此回答的是“同一台 CPU 上模型前向有多快”，而不是完整训练一轮需要多久。绝对数值依赖运行机器，参数量则与硬件无关。
+
+\input{tables/cpu_benchmark}
+
 \subsection{检查点与日志}
 
 每轮训练都保存 \texttt{last.pt}，验证准确率刷新时保存 \texttt{best.pt}。检查点不只包含模型权重，还包括优化器、学习率调度器、当前轮次、最佳验证准确率和完整配置。最终测试始终重新加载 \texttt{best.pt}，保证报告指标对应验证阶段选择出的同一模型状态。

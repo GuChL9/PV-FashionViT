@@ -311,7 +311,9 @@ def main():
         run_dir,
         args.smoke,
         skip_grid,
-        publish_global=not args.smoke,
+        publish_global=(
+            not args.smoke and config.get("output", {}).get("publish_global", True)
+        ),
     )
     print(json.dumps({"device": str(device), "cpu_threads": torch.get_num_threads(), **summary},
                      ensure_ascii=False, indent=2))

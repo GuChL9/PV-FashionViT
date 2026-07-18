@@ -26,3 +26,14 @@ def test_sincos_profile_is_explicit():
     config = load_config("configs/vit_sincos.yaml")
     assert config["model"]["positional_encoding"] == "sincos"
     assert config["model"]["pooling"] == "mean"
+
+
+def test_augmentation_ablation_changes_one_training_component_at_a_time():
+    shift = load_config("configs/ablations/vit_shift_s42.yaml")
+    shift_rotation = load_config("configs/ablations/vit_shift_rotation_s42.yaml")
+    assert shift["data"]["train_mode"] == "random_shift"
+    assert shift["data"]["random_erasing_prob"] == 0.0
+    assert shift_rotation["data"]["train_mode"] == "shift_rotation"
+    assert shift_rotation["data"]["random_erasing_prob"] == 0.0
+    assert shift["model"] == shift_rotation["model"]
+    assert shift["output"]["publish_global"] is False

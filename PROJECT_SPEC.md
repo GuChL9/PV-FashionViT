@@ -17,6 +17,8 @@
 仿射旋转/缩放先作用于原始 28x28 前景，随后粘贴到画布，再进行 Random Erasing。`random_shift` 是画布放置策略，不与仿射变换中的二次平移叠加。
 正式增强模型使用 `shift_rotation`：平移范围为 `[-18, 18]`，旋转范围为 `[-45°, 45°]`，不额外混入缩放。固定角度评估使用 `[-45°, -30°, -15°, 0°, 15°, 30°, 45°]`。
 
+增强逐项消融保持 Tiny ViT、CLS pooling、优化器和最多 12 epochs 的预算不变，只依次扩大训练分布：Center、仅随机平移、随机平移+旋转、随机平移+旋转+Random Erasing。仓库默认只把 seed 42 用作这条支线的探索性结果；它不能替代六组主实验的五随机种子均值，也不应据此声称微小差异具有统计稳定性。中间阶段设置 `output.publish_global=false`，避免覆盖主实验汇总表。
+
 ## 指标口径
 
 - Center / Small Shift / Large Shift Accuracy：相应固定测试协议下完整测试集准确率。
@@ -38,3 +40,4 @@
 - Tiny ViT 与 HybridConv-ViT 默认使用 `patch_size=7`、`embed_dim=64`、`depth=2` 和 `mlp_ratio=2`，把 token 数从 196 降为 64。
 - 默认最多训练 12 epochs，并在至少 5 epochs 后以验证准确率执行 patience=3 的早停。
 - 首轮训练只自动执行 Center、Small Shift 和 Large Shift；49 点 Grid 通过 `--grid` 单独运行。
+- CPU 效率表统一使用 8 个 PyTorch 线程、batch size 64、5 次预热和 30 次计时，只统计 `eval()`/`inference_mode()` 下的模型前向。表中延迟不含数据读取、预处理、反向传播和优化器更新；不同机器上的绝对数值不可直接横比。
