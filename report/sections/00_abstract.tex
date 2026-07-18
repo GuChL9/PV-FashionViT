@@ -1,7 +1,7 @@
 \begin{abstract}
   标准 FashionMNIST 的服饰主体大多位于图像中央，常规测试准确率因而难以反映模型面对位置变化时的稳定性。本项目将原始 $28\times28$ 灰度图像放入 $56\times56$ 画布，并施加可控平移和最大 $45^\circ$ 的双向旋转。构造后的数据集支持中心、小幅平移、大幅平移、$7\times7$ 位置网格、随机旋转和固定角度扫描等评估协议；随机擦除只作为增强模型的训练设置使用。在统一的 CPU 训练预算下，项目比较了 MLP、CNN、带可学习绝对位置编码的 Tiny ViT，以及依次加入复合增强、Mean Pooling 和卷积 stem 的三种 ViT 变体。
 
-  五个随机种子下的结果显示，中心准确率不能替代位置鲁棒性评价。CNN 的 Center Accuracy 均值达到 $90.93\%$，但 Grid Accuracy 仅为 $13.09\%$；ViT-AbsPos 的 Grid Accuracy 为 $20.68\%$，虽高于另外两种中心训练基线，仍保留明显的中心偏置。采用平移、旋转与随机擦除组成的增强方案后，ViT-Aug 和 ViT-MeanPool 的网格表现分别提升至 $63.77\%$ 和 $65.17\%$。加入卷积 stem 的 HybridConv-ViT 取得 $81.05\%$ 的 Grid Accuracy，并在 Center、Large Shift、Rotation 和 Shift+Rotation 等协议下维持约 $81\%$ 的准确率；其七个固定角度的平均准确率为 $80.24\%$。补充的三种子控制实验表明，平移和旋转增强分别承担位置与角度鲁棒性的主要提升，Random Erasing 在当前设置下基本中性；移除位置编码虽能缓解中心依赖，却仍不能替代位移增强。等半径裁剪对照也未观察到增强模型在可能裁剪坐标上的一致额外惩罚。跨种子汇总与随机种子 42 的位置、角度及错误可视化共同表明：面向目标扰动的增强组合带来最大性能跃升，局部卷积特征进一步改善整体稳定性，但相似服饰类别与极端边缘输入仍构成困难。综合这些结果，可以认为 HybridConv-ViT 已达到本项目对位置可变分类器的初步设计要求。\par\vspace{0.5em}
+  五个随机种子下的结果显示，中心准确率不能替代位置鲁棒性评价。CNN 的 Center Accuracy 均值达到 $90.93\%$，但 Grid Accuracy 仅为 $13.09\%$；ViT-AbsPos 的 Grid Accuracy 为 $20.68\%$，虽高于另外两种中心训练基线，仍保留明显的中心偏置。采用平移、旋转与随机擦除组成的增强方案后，ViT-Aug 和 ViT-MeanPool 的网格表现分别提升至 $63.77\%$ 和 $65.17\%$。加入卷积 stem 的 HybridConv-ViT 取得 $81.05\%$ 的 Grid Accuracy，并在 Center、Large Shift、Rotation 和 Shift+Rotation 等协议下维持约 $81\%$ 的准确率；其七个固定角度的平均准确率为 $80.24\%$。跨种子汇总与随机种子 42 的位置、角度及错误可视化共同表明：面向目标扰动的增强组合带来最大性能跃升，局部卷积特征进一步改善整体稳定性，但边缘裁剪和相似服饰类别仍构成主要困难。综合这些结果，可以认为 HybridConv-ViT 已达到本项目对位置可变分类器的初步设计要求。\par\vspace{0.5em}
 
   \noindent\textbf{关键词：}位置可变性；FashionMNIST；Vision Transformer；鲁棒性评估；数据增强；可视化分析
 \end{abstract}

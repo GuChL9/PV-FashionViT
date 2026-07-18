@@ -3,22 +3,7 @@ from __future__ import annotations
 import time
 
 import torch
-
-try:
-    from tqdm import tqdm
-except ImportError:  # Keep lightweight CPU-only environments usable.
-    class _PlainProgress:
-        def __init__(self, iterable):
-            self.iterable = iterable
-
-        def __iter__(self):
-            return iter(self.iterable)
-
-        def set_postfix(self, **_kwargs):
-            return None
-
-    def tqdm(iterable, **_kwargs):
-        return _PlainProgress(iterable)
+from tqdm import tqdm
 
 
 def train_one_epoch(model, loader, criterion, optimizer, device, epoch: int, grad_clip: float | None = None):
@@ -50,3 +35,4 @@ def train_one_epoch(model, loader, criterion, optimizer, device, epoch: int, gra
         "epoch_time": time.perf_counter() - start,
         "learning_rate": optimizer.param_groups[0]["lr"],
     }
+

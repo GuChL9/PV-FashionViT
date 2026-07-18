@@ -60,41 +60,11 @@ python src/visualize_data.py
 
 其中 seed 42 同时作为训练曲线、位置热力图、逐类结果和 attention 图的代表性 run；它已经包含在 30 个 run 中。
 
-数据增强还提供一条逐项消融支线。它保持 Tiny ViT、优化器与训练预算不变，依次比较 Center、仅平移、平移+旋转、平移+旋转+Random Erasing。默认使用 42、2026、3407 三个随机种子，已存在完整 `evaluation.json` 的运行会自动跳过：
-
-```powershell
-.\scripts\run_augmentation_ablation.ps1
-```
-
-如需指定随机种子或强制重跑：
-
-```powershell
-.\scripts\run_augmentation_ablation.ps1 -Seeds 42,2026,3407 -Force
-```
-
-脚本不会改写六组主实验的全局汇总表。完成后会生成三种子原始表、均值/标准差汇总、`report/tables/augmentation_stages.tex` 和 `report/figures/augmentation_stages.png`。
-
-位置编码支线固定 Center 训练、CLS pooling 和同一 Tiny ViT，只比较 Learnable Absolute、固定二维 Sin-Cos 与 No Positional Encoding：
-
-```powershell
-.\scripts\run_position_encoding_ablation.ps1
-```
-
-等半径裁剪对照复用 seed 42 的 Center 与完整增强 checkpoint。在完全相同的位移半径内，分别汇总几何上保证完整和可能发生裁剪的坐标：
-
-```powershell
-.\scripts\run_matched_clipping.ps1
-```
-
-该分析使用 7 个精确匹配半径和 104 个坐标，输出 `report/tables/matched_clipping.tex` 与 `report/figures/matched_clipping.png`。它比原 49 点内外圈更好地控制离中心距离，但坐标方向仍不完全相同，因此仍表述为距离匹配关联，而非严格因果效应。
-
-统一 CPU 前向基准可独立运行：
+位置编码消融的可选扩展（不计入上面的六组主实验）为：
 
 ```bash
-python src/benchmark_cpu.py
+python src/main.py --config configs/vit_sincos.yaml
 ```
-
-它在 8 个 PyTorch 线程、batch size 64 下，对五种不同推理结构分别预热 5 次并测量 30 个 batch，报告参数量、平均 batch 延迟和吞吐量。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS) 结构，因此只计一次；数据增强不会增加推理结构。该结果只测模型前向，不包含数据加载，也不等同于完整训练耗时。
 
 快速验证整个程序链路：
 
@@ -160,10 +130,9 @@ python src/main.py --config configs/gpu/vit_abspos.yaml
 ```bash
 python src/analyze_results.py
 python src/analyze_multiseed_results.py
-python src/analyze_clipping_effect.py
 ```
 
-第一个脚本只读取六个 seed 42 run，生成训练曲线、位置网格、角度图和逐类图；第二个脚本读取全部 30 个 run，生成五种子主表、误差图和模型差值图；第三个脚本把 seed 42 的 49 点位置网格拆成无裁剪内层 5×5 与可能裁剪的外圈，量化边缘区域的额外下降。三者共享同一批正式训练结果，不再依赖无 seed 后缀的旧单种子目录。
+前者只读取六个 seed 42 run，生成训练曲线、位置网格、角度图和逐类图；后者读取全部 30 个 run，生成五种子主表、误差图和模型差值图。两者共享同一批多种子训练结果，不再依赖无 seed 后缀的旧单种子目录。
 
 ### 正式多种子评估完成后的核心产物
 
@@ -171,7 +140,6 @@ python src/analyze_clipping_effect.py
 
 - `outputs/figures/grid_accuracy_panel.png`：六个模型的 7×7 Grid Accuracy heatmap 面板；
 - `outputs/figures/grid_accuracy_comparison.png`：六个模型的 Grid Accuracy 对比；
-- `report/figures/clipping_effect_comparison.png`：seed 42 的无裁剪内层与可能裁剪外圈对比；
 - `outputs/figures/angle_robustness_heatmap.png`：固定角度准确率热力图，并附平均与最差角度表现；
 - `outputs/figures/model_accuracy_comparison.png`：Center Accuracy 对比；
 - `outputs/figures/robust_drop_comparison.png`：Robust Drop 对比；
@@ -191,7 +159,6 @@ python src/analyze_clipping_effect.py
 ## 报告可围绕的关键启示
 
 - 不应只比较中心位置 Accuracy。`Robust Drop` 与 7×7 heatmap 才能直接说明模型是否依赖“目标位于中心”的训练偏置。
-- 49 点网格还应区分无裁剪内层与可能裁剪外圈；两者的差距能量化边缘区域的额外困难，但由于位置距离同时变化，不能把差值全部归因于裁剪。
 - MLP、CNN 与 ViT-AbsPos 的作用是建立对照：它们说明局部归纳偏置和绝对位置编码在位置扰动下各自的局限，而非单纯争夺最高中心准确率。
 - 数据增强、Mean Pooling 与卷积 stem 分别对应数据、聚合方式和结构三个工程层面的改进；消融表应按这一控制变量逻辑解释。
 - 类别准确率、混淆矩阵与错误样本需要共同解释：衣物外形相近、边缘裁剪和只看到局部纹理都会造成错误，不能把所有错误简单归因于模型结构。

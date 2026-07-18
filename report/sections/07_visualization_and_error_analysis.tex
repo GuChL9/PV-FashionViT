@@ -30,37 +30,7 @@
   \label{fig:grid-panel}
 \end{figure}
 
-\subsection{无裁剪内层与可能裁剪外圈}
-
-为了进一步检查边缘下降，表\ref{tab:clipping-effect}和图\ref{fig:clipping-effect}把同一份 $7\times7$ 网格拆成两组。内层 $5\times5$ 使用 $\{-12,-6,0,6,12\}$，28 像素前景在 56 像素画布中保持完整；外圈 24 个点至少有一个坐标为 $\pm18$，因而会在对应方向损失 4 像素。这个拆分不需要重新训练或重新选择样本，每个坐标仍评估完整测试集。
-
-\input{tables/clipping_effect}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.98\textwidth]{clipping_effect_comparison.png}
-  \caption{随机种子 42 的无裁剪内层 $5\times5$ 与可能裁剪外圈 Accuracy 对比，柱顶数字为准确率，gap 为两组百分点差}
-  \label{fig:clipping-effect}
-\end{figure}
-
-三个中心训练基线的内外圈差距为 6.35--9.44 个百分点，其中 ViT-AbsPos 最大；ViT-Aug、ViT-MeanPool 和 HybridConv-ViT 的差距只有 1.05--1.70 个百分点。换言之，增强模型不仅热力图更平坦，在前景部分越界的外圈也没有出现额外的大幅崩溃。不过，外圈同时比内层离中心更远，因此这项拆分只能量化“边缘位置加上裁剪”的联合惩罚，不能把差值全部解释为可见信息损失的纯因果效应。
-
-\subsection{等半径裁剪对照}
-
-为排除“外圈离中心更远”这一明显混杂，项目在全部整数位移中按 $r^2=dx^2+dy^2$ 分组，只保留同一精确半径下同时存在无裁剪和可能裁剪坐标的分组。最终得到 7 个半径、104 个坐标；每个坐标均评估完整测试集，先在半径内分别宏平均两类坐标，再对 7 个半径作宏平均。该分析复用 seed 42 的 Center-trained ViT 与 Augmented ViT 检查点。
-
-\input{tables/matched_clipping}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.90\textwidth]{matched_clipping.png}
-  \caption{seed 42 的等半径裁剪对照；纵轴为每个精确位移半径内无裁剪与可能裁剪坐标的准确率差}
-  \label{fig:matched-clipping}
-\end{figure}
-
-表\ref{tab:matched-clipping}显示，Center-trained ViT 的无裁剪与可能裁剪宏平均分别为 $16.27\%$ 和 $17.54\%$，Gap 反而为 $-1.27$ 个百分点；这不能解释为裁剪提高准确率，而是说明在模型已经严重失效的极端半径上，坐标方向差异足以改变比较符号。Augmented ViT 的两组准确率为 $65.88\%$ 和 $65.77\%$，Gap 仅 $0.11$ 个百分点，图\ref{fig:matched-clipping}中七个半径的差值也大多贴近零。与原内外圈统计相比，等距离后没有观察到一致的额外裁剪惩罚，原来的内外圈差距不能简单归因于可见像素损失。
-
-这项对照精确控制了欧氏位移距离，但同一半径内两类坐标的方向集合并不完全相同，几何上的“可能裁剪”也不等于每张 FashionMNIST 前景都损失相同比例的有效像素；结果仍应解释为距离匹配后的关联，而不是裁剪的纯因果效应。
+边缘区域的下降包含两个来源：模型可能依赖中心位置，也可能因为前景截断而缺少类别信息。增强模型在相同裁剪条件下仍明显更平坦，说明中心偏置确实可以通过训练分布缓解；但网格实验无法把位置偏置和可见信息损失完全分离，这一限制需要在结论中保留。
 
 \subsection{角度响应}
 

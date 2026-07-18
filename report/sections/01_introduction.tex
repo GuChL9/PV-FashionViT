@@ -54,8 +54,7 @@ Transformer 通过自注意力在序列元素之间建立全局联系\cite{vaswa
 \begin{itemize}
   \item 实现可复现的 PV-FashionMNIST，统一记录 $dx$、$dy$、angle 和 scale，并使随机参数随 epoch 更新；
   \item 实现 MLP、CNN、Tiny ViT 和 HybridConv-ViT，通过 YAML 继承管理 CPU 与 GPU 配置，并组织六组正式实验；
-  \item 建立 Center、Small Shift、Large Shift、Grid、Rotation 和 Shift+Rotation 评估协议，并补充等位移半径裁剪对照，输出 Robust Drop、Rotation Drop、逐类准确率和混淆矩阵；
-  \item 对增强阶段与位置编码开展三个随机种子的控制变量消融，自动汇总均值、样本标准差、LaTeX 表格和统计图；
+  \item 建立 Center、Small Shift、Large Shift、Grid、Rotation 和 Shift+Rotation 评估协议，输出 Robust Drop、Rotation Drop、逐类准确率和混淆矩阵；
   \item 将数据构造、训练曲线、位置网格、角度响应、错误样本和 Attention Rollout 整理为可自动重建的报告资产；
   \item 保存 \texttt{best.pt}、\texttt{last.pt}、完整配置、逐轮日志和逐样本预测，使训练、测试与报告汇总可以分阶段复现。
 \end{itemize}

@@ -1,4 +1,0 @@
-_base_: vit_center_stage.yaml
-run_name: vit_no_pos_center_cls_cpu
-model:
-  positional_encoding: none

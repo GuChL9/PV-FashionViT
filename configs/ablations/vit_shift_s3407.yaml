@@ -1,3 +1,0 @@
-_base_: vit_shift.yaml
-seed: 3407
-run_name: vit_shift_cpu_s3407

@@ -1,7 +1,0 @@
-_base_: ../vit_abspos.yaml
-run_name: vit_shift_rotation_cpu
-data:
-  train_mode: shift_rotation
-  random_erasing_prob: 0.0
-output:
-  publish_global: false

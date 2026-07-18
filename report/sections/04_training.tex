@@ -121,12 +121,6 @@ optimizer.step()                   # AdamW parameter update
 
 验证集采用 Center 协议，优点是简单、稳定，也和原始 FashionMNIST 分类任务直接对应；代价是增强模型仍按中心准确率选择检查点，而不是按 Grid 或 Shift+Rotation 表现选优。本项目保留这一统一标准以便完成横向比较，并把更全面的鲁棒性验证留作后续改进。
 
-\subsection{统一 CPU 前向基准}
-
-除训练日志中的单轮耗时外，项目还用 \texttt{src/benchmark\_cpu.py} 对五种不同推理结构执行统一前向基准。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS)，数据增强只改变训练输入，因此不重复计时。所有模型均切换到 \texttt{eval()}，在 \texttt{inference\_mode()} 下接收同一形状的随机输入；固定 8 个 PyTorch 线程和 batch size 64，先预热 5 个 batch，再重复测量 30 个 batch。表\ref{tab:cpu-benchmark}中的延迟不含数据读取、图像变换、反向传播和优化器更新，因此回答的是“同一台 CPU 上模型前向有多快”，而不是完整训练一轮需要多久。绝对数值依赖运行机器，参数量则与硬件无关。
-
-\input{tables/cpu_benchmark}
-
 \subsection{检查点与日志}
 
 每轮训练都保存 \texttt{last.pt}，验证准确率刷新时保存 \texttt{best.pt}。检查点不只包含模型权重，还包括优化器、学习率调度器、当前轮次、最佳验证准确率和完整配置。最终测试始终重新加载 \texttt{best.pt}，保证报告指标对应验证阶段选择出的同一模型状态。
@@ -172,11 +166,6 @@ python src/visualize_data.py
 .\scripts\run_multiseed_experiments.ps1
 .\scripts\eval_multiseed_grid.ps1
 python src/visualize_attention_comparison.py
-.\scripts\run_augmentation_ablation.ps1
-.\scripts\run_position_encoding_ablation.ps1
-.\scripts\run_matched_clipping.ps1
 \end{verbatim}
 
 \texttt{eval\_multiseed\_grid.ps1} 会先为 30 个检查点完成固定位置和固定角度评估，再用随机种子 42 生成代表性细节图，最后汇总五个随机种子的主表和统计图。报告表格不依赖手工抄录，而是由每次运行的 \texttt{evaluation.json}、网格 CSV 和角度 CSV 重建。
-
-后三个脚本对应收尾阶段的控制变量实验：前三个种子的逐项增强消融、固定 Center+CLS 条件下的位置编码消融，以及按完全相同欧氏位移半径分组的边缘裁剪分析。脚本会跳过已经存在 \texttt{evaluation.json} 的训练结果；若需从头复跑，可为前两个脚本添加 \texttt{-Force}。这些补充结果同样由原始 JSON/CSV 自动生成 LaTeX 表格与图片，避免手工转录误差。

@@ -25,4 +25,3 @@ foreach ($model in $models) {
 # aggregate tables and uncertainty plots. Both are rebuilt from the same 30 runs.
 python src/analyze_results.py
 python src/analyze_multiseed_results.py
-python src/analyze_clipping_effect.py

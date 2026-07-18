@@ -1,4 +1,0 @@
-_base_: ../vit_aug.yaml
-run_name: vit_shift_rotation_erasing_cpu
-output:
-  publish_global: false
