@@ -130,9 +130,10 @@ python src/main.py --config configs/gpu/vit_abspos.yaml
 ```bash
 python src/analyze_results.py
 python src/analyze_multiseed_results.py
+python src/analyze_clipping_effect.py
 ```
 
-前者只读取六个 seed 42 run，生成训练曲线、位置网格、角度图和逐类图；后者读取全部 30 个 run，生成五种子主表、误差图和模型差值图。两者共享同一批多种子训练结果，不再依赖无 seed 后缀的旧单种子目录。
+第一个脚本只读取六个 seed 42 run，生成训练曲线、位置网格、角度图和逐类图；第二个脚本读取全部 30 个 run，生成五种子主表、误差图和模型差值图；第三个脚本把 seed 42 的 49 点位置网格拆成无裁剪内层 5×5 与可能裁剪的外圈，量化边缘区域的额外下降。三者共享同一批正式训练结果，不再依赖无 seed 后缀的旧单种子目录。
 
 ### 正式多种子评估完成后的核心产物
 
@@ -140,6 +141,7 @@ python src/analyze_multiseed_results.py
 
 - `outputs/figures/grid_accuracy_panel.png`：六个模型的 7×7 Grid Accuracy heatmap 面板；
 - `outputs/figures/grid_accuracy_comparison.png`：六个模型的 Grid Accuracy 对比；
+- `report/figures/clipping_effect_comparison.png`：seed 42 的无裁剪内层与可能裁剪外圈对比；
 - `outputs/figures/angle_robustness_heatmap.png`：固定角度准确率热力图，并附平均与最差角度表现；
 - `outputs/figures/model_accuracy_comparison.png`：Center Accuracy 对比；
 - `outputs/figures/robust_drop_comparison.png`：Robust Drop 对比；
@@ -159,6 +161,7 @@ python src/analyze_multiseed_results.py
 ## 报告可围绕的关键启示
 
 - 不应只比较中心位置 Accuracy。`Robust Drop` 与 7×7 heatmap 才能直接说明模型是否依赖“目标位于中心”的训练偏置。
+- 49 点网格还应区分无裁剪内层与可能裁剪外圈；两者的差距能量化边缘区域的额外困难，但由于位置距离同时变化，不能把差值全部归因于裁剪。
 - MLP、CNN 与 ViT-AbsPos 的作用是建立对照：它们说明局部归纳偏置和绝对位置编码在位置扰动下各自的局限，而非单纯争夺最高中心准确率。
 - 数据增强、Mean Pooling 与卷积 stem 分别对应数据、聚合方式和结构三个工程层面的改进；消融表应按这一控制变量逻辑解释。
 - 类别准确率、混淆矩阵与错误样本需要共同解释：衣物外形相近、边缘裁剪和只看到局部纹理都会造成错误，不能把所有错误简单归因于模型结构。

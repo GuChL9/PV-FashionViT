@@ -1,0 +1,22 @@
+\begin{table}[H]
+  \centering
+  \caption{按题目 A/B 记法重排的 ViT 四设置结果（五个随机种子的均值 $\pm$ 标准差）}
+  \label{tab:ab-protocol-matrix}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{lcc}
+    \toprule
+      & 测试 B：Center & 测试 A：Large Shift \\
+    \midrule
+    训练 B：Center
+      & \fcolorbox{PVBorder}{PVBlueLight}{\parbox[c][1.35cm][c]{0.22\textwidth}{\centering B/B\\ViT-AbsPos\\\textbf{86.38\% $\pm$ 0.20}}}
+      & \fcolorbox{PVBorder}{PVGoldLight}{\parbox[c][1.35cm][c]{0.22\textwidth}{\centering B/A\\ViT-AbsPos\\\textbf{20.03\% $\pm$ 1.36}}} \\
+    \addlinespace[0.35em]
+    训练 A：Shift+Rotation
+      & \fcolorbox{PVBorder}{PVTealLight}{\parbox[c][1.35cm][c]{0.22\textwidth}{\centering A/B\\ViT-Aug\\\textbf{62.81\% $\pm$ 2.12}}}
+      & \fcolorbox{PVBorder}{PVGreenLight}{\parbox[c][1.35cm][c]{0.22\textwidth}{\centering A/A\\ViT-Aug\\\textbf{64.60\% $\pm$ 2.37}}} \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.45em}
+  \parbox{0.92\textwidth}{\footnotesize\textcolor{PVMuted}{说明：A 表示目标位置发生变化。为复用六组正式实验，训练 A 对应项目中的 Shift+Rotation 与 Random Erasing 组合，而测试 A 只使用 Large Shift；因此该矩阵用于直观呈现训练/测试分布交叉，不把 B/A 到 A/A 的差异解释为纯平移增强的独立因果效应。}}
+\end{table}
