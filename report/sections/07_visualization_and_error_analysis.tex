@@ -6,7 +6,7 @@
 
 图\ref{fig:training-curves}显示，中心训练的 MLP、CNN 和 ViT-AbsPos 很快达到较高验证准确率，验证损失也较低。ViT-Aug 和 ViT-MeanPool 的中心验证准确率明显较低，这是因为训练样本同时经历大范围平移和旋转，模型需要把有限容量分配给更广的输入分布，而验证集仍保持居中。
 
-在随机种子 42 的运行中，HybridConv-ViT 的中心验证曲线高于另外两个增强 ViT，且损失持续下降。ViT-Aug 在第 7 轮达到本轮最佳验证准确率，随后三轮没有满足最小改进阈值，于第 10 轮触发早停；因此其曲线没有第 11、12 轮，这是真实训练过程而非日志缺失。训练曲线用于说明优化过程，不替代五种子的最终测试结果。
+在随机种子 42 的运行中，HybridConv-ViT 的中心验证曲线高于另外两个增强 ViT，且损失持续下降。ViT-Aug 在第 7 轮达到最佳验证准确率，并于第 10 轮触发早停，因此曲线记录到第 10 轮。训练曲线用于观察优化过程，最终测试结果以五个随机种子的统计为准。
 
 \begin{figure}[H]
   \centering
@@ -19,7 +19,7 @@
 
 \subsection{位置响应}
 
-图\ref{fig:grid-panel}是回答“位置变化是否影响分类”的核心证据。MLP、CNN 和 ViT-AbsPos 都在 $(0,0)$ 附近形成显著高值区，向四周移动后迅速变浅。中心测试只取到了这些分布的最高区域，因此会严重高估模型面对任意位置时的水平；精确的均值、极值和下降幅度已在第 6 节给出。
+图\ref{fig:grid-panel}展示各模型随位置变化的准确率。MLP、CNN 和 ViT-AbsPos 都在 $(0,0)$ 附近形成显著高值区，向四周移动后迅速变浅。中心测试只覆盖这些分布的最高区域，因此会高估模型面对任意位置时的表现；均值、极值和下降幅度见第 6 节。
 
 随机种子 42 下，ViT-Aug 和 ViT-MeanPool 的热力图不再出现突出的中心岛，说明训练期随机位置覆盖改变了模型的空间响应。HybridConv-ViT 的 49 点结果进一步收紧，最差位置与最好位置只相差 4.50 个百分点。该局部形态与图\ref{fig:grid-comparison}的跨种子总体排序一致；与单个 Grid Accuracy 相比，热力图还能说明代表性运行的改进不是由少数容易坐标拉高平均值。
 
@@ -58,9 +58,7 @@
   \label{fig:matched-clipping}
 \end{figure}
 
-表\ref{tab:matched-clipping}显示，Center-trained ViT 的无裁剪与可能裁剪宏平均分别为 $16.27\%$ 和 $17.54\%$，Gap 反而为 $-1.27$ 个百分点；这不能解释为裁剪提高准确率，而是说明在模型已经严重失效的极端半径上，坐标方向差异足以改变比较符号。Augmented ViT 的两组准确率为 $65.88\%$ 和 $65.77\%$，Gap 仅 $0.11$ 个百分点，图\ref{fig:matched-clipping}中七个半径的差值也大多贴近零。与原内外圈统计相比，等距离后没有观察到一致的额外裁剪惩罚，原来的内外圈差距不能简单归因于可见像素损失。
-
-这项对照精确控制了欧氏位移距离，但同一半径内两类坐标的方向集合并不完全相同，几何上的“可能裁剪”也不等于每张 FashionMNIST 前景都损失相同比例的有效像素；结果仍应解释为距离匹配后的关联，而不是裁剪的纯因果效应。
+表\ref{tab:matched-clipping}显示，Center-trained ViT 的无裁剪与可能裁剪宏平均分别为 $16.27\%$ 和 $17.54\%$，Gap 为 $-1.27$ 个百分点；在模型已经严重失效的极端半径上，坐标方向差异会影响比较结果。Augmented ViT 的两组准确率为 $65.88\%$ 和 $65.77\%$，Gap 仅 $0.11$ 个百分点，七个半径的差值也大多接近零。距离匹配后没有观察到一致的额外裁剪惩罚。由于同一半径内两类坐标的方向集合并不完全相同，该结果只用于说明距离匹配后的差异。
 
 \subsection{角度响应}
 
@@ -108,20 +106,20 @@
 
 \subsection{Attention Rollout}
 
-Attention 对照使用随机种子 42。图\ref{fig:attention-one}和图\ref{fig:attention-two}每行依次给出输入、ViT-AbsPos rollout 和 Hybrid rollout。Hybrid 的高响应通常更集中于当前前景，例如角落中的鞋面、衣身或裤腿；ViT-AbsPos 的响应有时扩散到前景外的空白区域，或者只覆盖局部边缘。
-
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.82\textwidth]{attention_abspos_vs_hybrid_01.png}
+  \includegraphics[width=0.79\textwidth]{attention_abspos_vs_hybrid_01.png}
   \caption{随机种子 42 中五个边缘位置样本的 Attention Rollout 对照（一），左至右为输入、ViT-AbsPos 和 HybridConv-ViT}
   \label{fig:attention-one}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.82\textwidth]{attention_abspos_vs_hybrid_02.png}
+  \includegraphics[width=0.79\textwidth]{attention_abspos_vs_hybrid_02.png}
   \caption{随机种子 42 中五个边缘位置样本的 Attention Rollout 对照（二）}
   \label{fig:attention-two}
 \end{figure}
 
-rollout 是注意力权重的传播结果，不等同于特征贡献或因果解释。因此，它只能与网格准确率和错误样本一起作为定性线索，不能单独证明卷积 stem 导致了某种决策机制。
+Attention 对照使用随机种子 42。图\ref{fig:attention-one}和图\ref{fig:attention-two}每行依次给出输入、ViT-AbsPos rollout 和 Hybrid rollout。Hybrid 的高响应通常更集中于当前前景，例如角落中的鞋面、衣身或裤腿；ViT-AbsPos 的响应有时扩散到前景外的空白区域，或者只覆盖局部边缘。
+
+rollout 展示注意力权重的传播结果，不直接等同于特征贡献。图中差异作为定性观察，并与网格准确率和错误样本结合分析。

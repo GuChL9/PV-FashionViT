@@ -14,12 +14,11 @@
 - 实验负责人：六组训练、网格评估、结果表格和图。
 - 报告负责人：方法、结果分析、演示材料与最终整合。
 
-实际贡献请按 commit、PR、实验记录和文档修改如实填写 `report/contribution.md`。
+实际贡献请按 commit、PR、实验记录和文档修改如实填写 `report/tables/contributions.tex`；最终报告中的分工说明位于 `report/sections/09_contributions.tex`。
 
 ## 仓库规则
 
 - 不提交 `data/`、`outputs/checkpoints/`、训练日志或临时目录。
 - 若必须交付权重，使用 Git LFS 或 GitHub Release，不要直接放进普通 Git 历史。
 - 禁止把测试集表现用于选择训练 epoch 或调参；best checkpoint 只依据验证集准确率。
-- 结果表中的数值必须能追溯到配置和 checkpoint，不手工编造或覆盖原始记录。
-
+- 结果表使用分析脚本生成的数值，并保留对应配置和 checkpoint；不要手工编造或覆盖原始记录。

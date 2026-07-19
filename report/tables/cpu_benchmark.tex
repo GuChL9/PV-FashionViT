@@ -1,11 +1,12 @@
 \begin{table}[H]
   \centering
+  \small
   \caption{统一 CPU 前向基准。使用 8 个 PyTorch 线程、batch size 64，预热后重复 30 次；延迟不含数据加载。}
   \label{tab:cpu-benchmark}
   \renewcommand{\arraystretch}{1.12}
   \begin{tabular}{lrrr}
     \toprule
-    Model & Parameters & Mean latency (ms/batch) & Throughput (images/s) \\
+    Model & Parameters & Latency (ms/batch) & Throughput (img/s) \\
     \midrule
     MLP & 805,642 & 0.37 & 173,570.3 \\
     CNN & 1,625,866 & 16.78 & 3,814.1 \\

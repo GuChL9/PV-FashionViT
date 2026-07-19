@@ -1,4 +1,4 @@
-\section{工程实现与训练闭环}
+\section{工程实现与训练设置}
 
 \subsection{配置驱动的运行流程}
 
@@ -22,8 +22,8 @@
 
     \node[stage, draw=PVTeal, fill=PVTealLight, below=12mm of best] (protocol) {测试协议\\平移 / 网格 / 角度};
     \node[stage, draw=PVTeal, fill=PVTealLight, left=of protocol] (metrics) {指标与记录\\JSON / CSV / 预测};
-    \node[stage, draw=PVGold, fill=PVGoldLight, left=of metrics] (analysis) {自动汇总\\表格与跨模型图};
-    \node[stage, draw=PVGreen, fill=PVGreenLight, left=of analysis] (report) {报告资产\\图片与 LaTeX 表};
+    \node[stage, draw=PVGold, fill=PVGoldLight, left=of metrics] (analysis) {结果汇总\\表格与跨模型图};
+    \node[stage, draw=PVGreen, fill=PVGreenLight, left=of analysis] (report) {报告输出\\图片与 LaTeX 表};
 
     \draw[arrow] (config) -- (train);
     \draw[arrow] (train) -- (valid);
@@ -42,53 +42,19 @@
         label={[font=\scriptsize\bfseries, text=PVTeal]below left:评估与发布阶段}] {};
     \end{scope}
   \end{tikzpicture}
-  \caption{主训练与测试流水线，耗时评估与训练解耦，结果均追溯到对应运行的最佳检查点}
+  \caption{训练、评估与结果汇总流程}
   \label{fig:experiment-pipeline}
 \end{figure}
 
-\subsection{从分类损失到参数更新}
+\subsection{训练目标与优化}
 
-\paragraph{分类与交叉熵}对一个含 $B$ 个样本的 batch，模型输出 logits $z_i=f_{\theta}(x_i)\in\mathbb{R}^{10}$。softmax 将任意实数映射为和为 1 的类别概率：
-\[
-  p_{i,k}=\frac{\exp(z_{i,k})}{\sum_{j=1}^{10}\exp(z_{i,j})}.
-\]
-预测类别为 $\hat y_i=\arg\max_k z_{i,k}$；由于 softmax 保持大小顺序，对 logits 或概率取最大值结果相同。Accuracy 统计 $\hat y_i=y_i$ 的比例，但它是离散指标，不能直接提供平滑梯度，因此训练使用交叉熵。设 label smoothing 系数为 $\varepsilon=0.1$、类别数为 $C=10$，平滑目标和 batch 损失为
+模型输出十类 logits，训练采用 label smoothing 系数 $\varepsilon=0.1$ 的交叉熵。设类别数为 $C=10$，平滑目标和 batch 损失为
 \[
   q_{i,k}=(1-\varepsilon)\mathbf{1}[k=y_i]+\frac{\varepsilon}{C},
   \qquad
   \mathcal L=-\frac{1}{B}\sum_{i=1}^{B}\sum_{k=1}^{C}q_{i,k}\log p_{i,k}.
 \]
-交叉熵对 logits 的导数具有直观形式 $\partial\mathcal L/\partial z_{i,k}=(p_{i,k}-q_{i,k})/B$：预测概率高于目标时梯度推动对应 logit 降低，反之则推动它升高。label smoothing 不改变分类标签，而是避免模型被要求把真值概率推到绝对 1。
-
-\paragraph{链式法则与反向传播}网络是多层函数复合 $z=f_L\circ\cdots\circ f_1(x)$。链式法则把输出端误差逐层传回：
-\[
-  \delta^{(L)}=\frac{\partial\mathcal L}{\partial z},\qquad
-  \delta^{(l)}=\delta^{(l+1)}
-  \frac{\partial h^{(l+1)}}{\partial h^{(l)}},\qquad
-  \frac{\partial\mathcal L}{\partial\theta_l}
-  =\delta^{(l+1)}\frac{\partial h^{(l+1)}}{\partial\theta_l}.
-\]
-卷积、矩阵乘法、ReLU、softmax 和 pooling 都在前向过程中记录局部运算关系，PyTorch 的自动微分据此计算向量--雅可比乘积，而不需要显式构造巨大的完整雅可比矩阵。\texttt{loss.backward()}完成的正是这一反向递推。
-
-\paragraph{梯度下降与小批量学习}最基本的梯度下降更新为
-\[
-  \theta_{t+1}=\theta_t-\eta\nabla_\theta\mathcal L(\theta_t),
-\]
-其中学习率 $\eta$ 控制步长。项目使用 mini-batch 梯度作为全训练集梯度的近似，使每次更新的计算量可控；AdamW 再利用梯度的一阶、二阶动量自适应各参数步长，并将 weight decay 与梯度更新分离。CosineAnnealing 随 epoch 降低学习率，梯度裁剪则在范数过大时按比例缩放，减少不稳定的大步更新。
-
-在实现层面，训练模式启用 Dropout 等随机层；验证和测试切换到 \texttt{eval()} 并关闭梯度记录。二者共享同一个 $f_\theta$，区别是训练阶段更新参数，评估阶段只执行前向分类和统计指标。
-
-\begin{lstlisting}[style=pvpython,caption={一个 batch 的训练核心。代码与交叉熵、链式法则和梯度下降更新逐项对应。},label={lst:train-step}]
-model.train()
-optimizer.zero_grad(set_to_none=True)
-logits = model(images)             # [B, 10]
-loss = criterion(logits, labels)   # smoothed cross entropy
-loss.backward()                    # chain-rule gradients
-clip_grad_norm_(model.parameters(), grad_clip)
-optimizer.step()                   # AdamW parameter update
-\end{lstlisting}
-
-代码\ref{lst:train-step}把上述数学关系压缩为一个 batch 的闭环：前向传播构造复合函数，交叉熵产生标量目标，反向传播应用链式法则，优化器沿降低损失的方向更新参数。数据增强只改变 $x$ 的观测分布，不改变十类标签空间、损失定义或这条求导链。
+其中 $p_{i,k}$ 为 softmax 概率。PyTorch 自动微分计算梯度，AdamW 以初始学习率 $3\times10^{-4}$ 和 weight decay 0.05 更新参数，CosineAnnealing 在训练过程中降低学习率，梯度范数裁剪上限为 1.0。训练时启用 Dropout；验证和测试使用 \texttt{eval()} 并关闭梯度记录。
 
 \subsection{训练设置}
 
@@ -117,19 +83,19 @@ optimizer.step()                   # AdamW parameter update
   \end{tabularx}
 \end{table}
 
-在随机种子 42 的代表性运行中，上述早停规则使 ViT-Aug 于第 7 轮达到最佳验证准确率，并在第 10 轮结束训练；其余五种配置运行到第 12 轮。因此，训练图中 ViT-Aug 缺少第 11、12 轮并不是日志丢失。报告训练图只读取每次运行最新的一段连续日志，避免把旧实验接到新曲线上。
+在随机种子 42 的代表性运行中，ViT-Aug 于第 7 轮达到最佳验证准确率，并在第 10 轮触发早停；其余五种配置运行到第 12 轮。训练图据此显示各次运行实际完成的轮数。
 
-验证集采用 Center 协议，优点是简单、稳定，也和原始 FashionMNIST 分类任务直接对应；代价是增强模型仍按中心准确率选择检查点，而不是按 Grid 或 Shift+Rotation 表现选优。本项目保留这一统一标准以便完成横向比较，并把更全面的鲁棒性验证留作后续改进。
+所有模型均按 Center 验证准确率选择检查点，以保持选优标准一致。该设置与原始 FashionMNIST 分类任务对应，但没有直接针对 Grid 或 Shift+Rotation 表现选优。
 
 \subsection{统一 CPU 前向基准}
 
-除训练日志中的单轮耗时外，项目还用 \texttt{src/benchmark\_cpu.py} 对五种不同推理结构执行统一前向基准。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS)，数据增强只改变训练输入，因此不重复计时。所有模型均切换到 \texttt{eval()}，在 \texttt{inference\_mode()} 下接收同一形状的随机输入；固定 8 个 PyTorch 线程和 batch size 64，先预热 5 个 batch，再重复测量 30 个 batch。表\ref{tab:cpu-benchmark}中的延迟不含数据读取、图像变换、反向传播和优化器更新，因此回答的是“同一台 CPU 上模型前向有多快”，而不是完整训练一轮需要多久。绝对数值依赖运行机器，参数量则与硬件无关。
+除训练日志中的单轮耗时外，项目还用 \texttt{src/benchmark\_cpu.py} 对五种不同推理结构执行统一前向基准。ViT-AbsPos 与 ViT-Aug 共用同一 Tiny ViT (CLS)，数据增强只改变训练输入，因此不重复计时。所有模型均切换到 \texttt{eval()} 并关闭梯度记录，接收同一形状的随机输入；固定 8 个 PyTorch 线程和 batch size 64，先预热 5 个 batch，再重复测量 30 个 batch。表\ref{tab:cpu-benchmark}中的延迟不含数据读取、图像变换、反向传播和优化器更新，因此回答的是“同一台 CPU 上模型前向有多快”，而不是完整训练一轮需要多久。绝对数值依赖运行机器，参数量则与硬件无关。
 
 \input{tables/cpu_benchmark}
 
 \subsection{检查点与日志}
 
-每轮训练都保存 \texttt{last.pt}，验证准确率刷新时保存 \texttt{best.pt}。检查点不只包含模型权重，还包括优化器、学习率调度器、当前轮次、最佳验证准确率和完整配置。最终测试始终重新加载 \texttt{best.pt}，保证报告指标对应验证阶段选择出的同一模型状态。
+每轮训练保存 \texttt{last.pt}，验证准确率刷新时保存 \texttt{best.pt}。检查点包含模型权重、优化器、学习率调度器、当前轮次、最佳验证准确率和完整配置。最终测试重新加载 \texttt{best.pt}。
 
 日志逐轮记录训练损失、训练准确率、验证损失、验证准确率、学习率和单轮耗时。正式重新训练开始时，当前运行的旧日志会被清空，避免多次运行的数据拼接成错误曲线；smoke test 使用独立的 \texttt{\_smoke} 目录，也不会写入正式汇总表。
 
@@ -160,7 +126,7 @@ optimizer.step()                   # AdamW parameter update
 \end{align}
 二者均以百分点表示。正值越大，说明模型从中心分布转移到扰动分布时损失越明显；小幅负值并不表示扰动提高了模型能力，而通常说明增强模型在不同条件下的性能接近，随机测试采样和训练分布差异造成了数个百分点波动。
 
-Grid Accuracy 是 49 个位置准确率的宏平均。项目同时保留网格最小值和最大值用于分析空间平坦性，但主表仍使用平均值，以便与指导文件中的核心口径一致。逐类准确率和混淆矩阵基于 Large Shift 预测统计，逐样本结果还记录 $dx$、$dy$ 和 angle，供错误样本与可视化脚本追溯。
+Grid Accuracy 是 49 个位置准确率的宏平均，同时报告网格最小值和最大值以分析空间平坦性。逐类准确率和混淆矩阵基于 Large Shift 预测统计，逐样本结果记录 $dx$、$dy$ 和 angle，用于错误样本与可视化分析。
 
 \subsection{可复现运行顺序}
 
@@ -177,6 +143,6 @@ python src/visualize_attention_comparison.py
 .\scripts\run_matched_clipping.ps1
 \end{verbatim}
 
-\texttt{eval\_multiseed\_grid.ps1} 会先为 30 个检查点完成固定位置和固定角度评估，再用随机种子 42 生成代表性细节图，最后汇总五个随机种子的主表和统计图。报告表格不依赖手工抄录，而是由每次运行的 \texttt{evaluation.json}、网格 CSV 和角度 CSV 重建。
+\texttt{eval\_multiseed\_grid.ps1} 为 30 个检查点完成固定位置和固定角度评估，再用随机种子 42 生成细节图，并汇总五个随机种子的主表和统计图。表格数据来自每次运行的 \texttt{evaluation.json}、网格 CSV 和角度 CSV。
 
-后三个脚本对应收尾阶段的控制变量实验：前三个种子的逐项增强消融、固定 Center+CLS 条件下的位置编码消融，以及按完全相同欧氏位移半径分组的边缘裁剪分析。脚本会跳过已经存在 \texttt{evaluation.json} 的训练结果；若需从头复跑，可为前两个脚本添加 \texttt{-Force}。这些补充结果同样由原始 JSON/CSV 自动生成 LaTeX 表格与图片，避免手工转录误差。
+后三个脚本分别运行三个随机种子的逐项增强消融、固定 Center+CLS 条件下的位置编码消融，以及按相同欧氏位移半径分组的边缘裁剪分析。脚本会跳过已有 \texttt{evaluation.json} 的训练结果；从头复跑前两个消融时可添加 \texttt{-Force}。
