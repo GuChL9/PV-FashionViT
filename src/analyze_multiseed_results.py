@@ -1,8 +1,6 @@
-"""Create report-ready multi-seed tables and figures.
+"""Aggregate multi-seed metrics into tables and figures.
 
-This script reads the 30 formal multi-seed run directories and aggregates
-metrics by base model. It does not depend on PyTorch, so it can be run after
-training from any Python environment that has matplotlib, numpy, and pandas.
+The script groups run directories by model and does not depend on PyTorch.
 """
 
 from __future__ import annotations
@@ -36,7 +34,7 @@ METRICS = [
     ("rotation_accuracy", "Rotation"),
     ("shift_rotation_accuracy", "Shift+Rotation"),
 ]
-# Matplotlib's standard tab colors: a clear lake blue and vivid orange.
+# Plot colors.
 BLUE = "#1F77B4"
 ORANGE = "#FF7F0E"
 DARK = "#111111"

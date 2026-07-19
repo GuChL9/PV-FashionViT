@@ -177,8 +177,7 @@ def run_evaluation_suite(
             run_dir / "figures" / "misclassified_examples.png",
         )
 
-    # A smoke run validates the code path only.  It must remain completely
-    # separate from formal experiment summaries used in plots and reports.
+    # Smoke runs do not update shared experiment summaries.
     if not publish_global:
         return summary
 
