@@ -1,0 +1,15 @@
+\begin{table}[H]
+  \centering
+  \small
+  \caption{seed 42 的等半径裁剪对照。每个半径内分别宏平均无裁剪与可能裁剪坐标，再对七个完全匹配半径作宏平均；Gap 为无裁剪减可能裁剪。}
+  \label{tab:matched-clipping}
+  \renewcommand{\arraystretch}{1.12}
+  \begin{tabular}{lcccc}
+    \toprule
+    Model & Radii & No-clip Acc & Possible-clip Acc & Gap (pp) \\
+    \midrule
+    Center-trained ViT & 7 & 16.27\% & 17.54\% & -1.27 \\
+    Augmented ViT & 7 & 65.88\% & 65.77\% & 0.11 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

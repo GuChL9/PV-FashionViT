@@ -93,8 +93,7 @@ def main():
     fig.savefig(output / "angle_variation_demo.png", dpi=180, bbox_inches="tight")
     plt.close(fig)
 
-    # Visualize the configured perturbation protocols without iterating over the
-    # training set.  This is a distribution audit, not a record of a past run.
+    # Sample the configured perturbation ranges without loading the training set.
     rng = np.random.default_rng(int(config["seed"]))
     sample_count = 12000
     shifts = rng.uniform(-edge, edge, size=(sample_count, 2))

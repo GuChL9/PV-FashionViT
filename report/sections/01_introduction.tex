@@ -4,11 +4,11 @@
 
 FashionMNIST 包含十类 $28\times28$ 灰度服饰图像\cite{xiao2017fashion}，规模适中、类别清晰，适合在有限算力下反复开展控制实验。它的主体位置相对固定，恰好为研究位置偏置提供了一个简洁起点。另一方面，Shirt、T-shirt/top、Pullover 和 Coat 等类别外形接近，当图像在边缘发生截断时，完整轮廓消失，模型会更依赖局部纹理，这使数据集同时具备可控性和一定的分析价值。
 
-Transformer 通过自注意力在序列元素之间建立全局联系\cite{vaswani2017attention}，Vision Transformer 则把图像划分为 patch 序列进行建模\cite{dosovitskiy2021image}。全局交互并不自动等价于位置不变性：patch 仍会与位置编码结合，训练数据也会决定模型看到哪些空间分布。因此，本项目不把“ViT 是否优于 CNN”设为预定结论，而是让 MLP、CNN、普通 ViT 和逐步改进的 ViT 在同一套位置与角度协议下接受检验。
+Transformer 通过自注意力在序列元素之间建立全局联系\cite{vaswani2017attention}，Vision Transformer 则把图像划分为 patch 序列进行建模\cite{dosovitskiy2021image}。全局交互并不自动带来位置不变性：patch 仍与位置编码结合，训练数据的空间分布也会影响模型。为此，本文在同一套位置与角度协议下比较 MLP、CNN、普通 ViT 和三种改进的 ViT。
 
 \subsection{项目目标}
 
-项目的目标不是再实现一个普通的 FashionMNIST 分类器，而是把中心分类任务改写为可测量的位置鲁棒性问题。围绕这一主线，需要回答三个问题：
+本文把中心分类任务扩展为可测量的位置鲁棒性问题，主要回答三个问题：
 
 \begin{enumerate}
   \item 当训练图像保持居中而测试目标发生平移或旋转时，分类性能会下降到什么程度？中心准确率能否代表真实的鲁棒性？
@@ -38,14 +38,14 @@ Transformer 通过自注意力在序列元素之间建立全局联系\cite{vaswa
       \textbf{六组模型对照}\\
       MLP / CNN / ViT / Hybrid};
     \node[flow, draw=PVGreen, fill=PVGreenLight, right=of models] (evidence) {
-      \textbf{多维鲁棒性证据}\\
+      \textbf{多协议评估}\\
       指标 / 网格 / 角度 / 错误};
 
     \draw[arrow] (center) -- (pv);
     \draw[arrow] (pv) -- (models);
     \draw[arrow] (models) -- (evidence);
   \end{tikzpicture}
-  \caption{项目探索主线，数据扰动、模型对照和可视化证据围绕“位置可变性”逐层展开}
+  \caption{位置可变分类实验的总体设计}
   \label{fig:project-roadmap}
 \end{figure}
 
@@ -54,7 +54,8 @@ Transformer 通过自注意力在序列元素之间建立全局联系\cite{vaswa
 \begin{itemize}
   \item 实现可复现的 PV-FashionMNIST，统一记录 $dx$、$dy$、angle 和 scale，并使随机参数随 epoch 更新；
   \item 实现 MLP、CNN、Tiny ViT 和 HybridConv-ViT，通过 YAML 继承管理 CPU 与 GPU 配置，并组织六组正式实验；
-  \item 建立 Center、Small Shift、Large Shift、Grid、Rotation 和 Shift+Rotation 评估协议，输出 Robust Drop、Rotation Drop、逐类准确率和混淆矩阵；
-  \item 将数据构造、训练曲线、位置网格、角度响应、错误样本和 Attention Rollout 整理为可自动重建的报告资产；
-  \item 保存 \texttt{best.pt}、\texttt{last.pt}、完整配置、逐轮日志和逐样本预测，使训练、测试与报告汇总可以分阶段复现。
+  \item 建立 Center、Small Shift、Large Shift、Grid、Rotation 和 Shift+Rotation 评估协议，并补充等位移半径裁剪对照，输出 Robust Drop、Rotation Drop、逐类准确率和混淆矩阵；
+  \item 对增强阶段与位置编码开展三个随机种子的控制变量消融，报告均值与样本标准差；
+  \item 生成数据示例、训练曲线、位置网格、角度响应、错误样本和 Attention Rollout 图；
+  \item 保存检查点、运行配置、逐轮日志和逐样本预测，便于复现实验。
 \end{itemize}

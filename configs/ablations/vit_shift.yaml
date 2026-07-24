@@ -1,0 +1,7 @@
+_base_: ../vit_abspos.yaml
+run_name: vit_shift_cpu
+data:
+  train_mode: random_shift
+  random_erasing_prob: 0.0
+output:
+  publish_global: false

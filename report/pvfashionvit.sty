@@ -12,7 +12,6 @@
 \RequirePackage{graphicx}
 \RequirePackage{hyperref}
 \RequirePackage{longtable}
-\RequirePackage{listings}
 \RequirePackage{tabularx}
 \RequirePackage{tikz}
 \RequirePackage{xcolor}
@@ -54,44 +53,8 @@
 \captionsetup{font=small,labelfont=bf}
 \graphicspath{{figures/}{../outputs/figures/}}
 
-\newcommand{\fieldplaceholder}[1]{\textcolor{PVMuted}{[待填写：#1]}}
-
-\newcommand{\placeholder}[1]{%
-  \par\medskip
-  \noindent\fcolorbox{PVBorder}{PVLight}{%
-    \parbox{0.94\linewidth}{\textcolor{PVMuted}{\textbf{填写提示：}#1}}%
-  }
-  \par\medskip
-}
-
 \newcommand{\figureplaceholder}[2][0.78\textwidth]{%
   \fcolorbox{PVBorder}{PVLight}{%
     \parbox[c][5.2cm][c]{#1}{\centering\color{PVMuted}\textbf{图片占位}\par\smallskip #2}%
   }%
-}
-
-\lstdefinestyle{pvpython}{
-  language=Python,
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{PVBlue}\bfseries,
-  commentstyle=\color{PVGreen}\itshape,
-  stringstyle=\color{PVGold},
-  numbers=left,
-  numberstyle=\tiny\color{PVMuted},
-  numbersep=8pt,
-  frame=single,
-  framerule=0.7pt,
-  rulecolor=\color{PVBorder},
-  backgroundcolor=\color{PVLight},
-  framesep=6pt,
-  xleftmargin=1.8em,
-  framexleftmargin=1.2em,
-  breaklines=true,
-  breakatwhitespace=true,
-  showstringspaces=false,
-  columns=fullflexible,
-  keepspaces=true,
-  aboveskip=0.8em,
-  belowskip=0.8em,
-  captionpos=b
 }

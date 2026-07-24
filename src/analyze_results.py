@@ -1,9 +1,8 @@
-"""Build representative report assets from the seed-42 multi-seed runs.
+"""Build detailed plots from the representative seed-42 runs.
 
-The five-seed tables and uncertainty figures are produced separately by
-``analyze_multiseed_results.py``.  This script keeps the detailed plots that
-need one concrete run (training curves, spatial grids, angle scans and class
-results) without requiring a second set of unsuffixed single-seed models.
+Five-seed tables and uncertainty figures are produced by
+``analyze_multiseed_results.py``. This script creates training curves, spatial
+grids, angle scans, and class-level results from one run per model.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ CLASS_NAMES = [
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Create formal result tables and report figures")
+    parser = argparse.ArgumentParser(description="Create result tables and figures")
     parser.add_argument("--root", default="outputs")
     parser.add_argument("--report-dir", default="report")
     return parser.parse_args()
@@ -49,7 +48,7 @@ def _display_name(run_name: str) -> str:
 
 
 def discover_runs(root: Path):
-    """Read exactly the six representative seed-42 formal runs."""
+    """Read the representative seed-42 run for each model."""
     records = []
     for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         if run_dir.name.endswith("_smoke"):
@@ -297,7 +296,7 @@ def copy_if_present(source: Path, destination: Path):
 
 
 def grid_accuracy_from_run(record) -> float:
-    """Prefer the concrete 49-row CSV over an older summary JSON value."""
+    """Compute grid accuracy from the 49-row CSV when available."""
     grid_path = record["run_dir"] / "tables" / "grid_accuracy.csv"
     if grid_path.exists():
         grid = pd.read_csv(grid_path)

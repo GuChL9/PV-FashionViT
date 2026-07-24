@@ -1,4 +1,4 @@
-"""Create report-ready attention comparisons for corrected edge cases.
+"""Create attention comparisons for selected edge-position samples.
 
 The figure intentionally selects samples for which ViT-AbsPos is wrong while
 HybridConv-ViT is correct.  It is an explanatory comparison, not a new metric:
